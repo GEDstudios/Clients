@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trinity Animations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h2 class="subtitle">TRINITY PREVIEW</h2>
+    </header>
+
+    <main id="animation-sections-container"></main>
+
+    <template id="lottie-card-template">
+        <div class="animation-wrapper">
+            <header class="card-header">
+                <div class="lottie-title">Animation Title</div>
+            </header>
+            
+            <div class="canvas-container">
+                <div class="lottie-animation"></div> 
+            </div>
+
+            <div class="controls-area">
+                <div class="timeline-simple">
+                    <div class="timeline-meta">
+                        <span class="timeline-framenumber frame-num-start">0</span>
+                        <div class="frame-counter">FR: 0</div>
+                        <span class="timeline-framenumber frame-num-end">--</span>
+                    </div>
+                    
+                    <div class="timeline-container">
+                        <div class="timeline-segment">
+                            <div class="timeline-progress-fill"></div>
+                        </div>
+                        <div class="playhead-marker"></div>
+                    </div>
+                </div>
+
+                <div class="toggle-container">
+                    <span class="toggle-label">WHT</span>
+                    <label class="switch">
+                        <input type="checkbox" class="theme-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="toggle-label">BLK</span>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
