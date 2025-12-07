@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lottie Animation Grid</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="global-nav">
+    <a href="../../index.html" class="nav-link">
+        <span>&larr;</span> Home
+    </a>
+
+    <a class="nav-brand" href="https://x10guy.studio" target="_blank">
+        <span class="brand-text">Animated & Developed by Guy Ekstein</span>
+        <span class="brand-highlight">@ x10guy.studio</span>
+    </a>
+</nav>
+    <h2 class="subtitle">HOVER TO PREVIEW</h2>
+
+    <div id="hero-section"></div>
+
+    <main id="animation-sections-container"></main>
+
+    <template id="lottie-card-template">
+        <div class="animation-wrapper">
+            <div class="lottie-title">Animation Title</div>
+            <div class="lottie-animation"></div> 
+            <div class="frame-counter">Frame: 0</div>
+
+            <div class="timeline-simple">
+                <div class="timeline-framenumbers">
+                    <span class="timeline-framenumber frame-num-start">0</span>
+                    <span class="timeline-framenumber frame-num-end">...</span>
+                </div>
+                <div class="timeline-container">
+                    <div class="timeline-segment segment-full active">
+                        <div class="timeline-progress-fill progress-full"></div>
+                    </div>
+                    <div class="playhead-marker"></div>
+                </div>
+                <div class="timeline-labels">
+                    <span class="timeline-label label-intro active">Start</span>
+                    <span class="timeline-label label-outro active" style="right: 0;">End</span>
+                </div>
+            </div>
+            
+            <div class="timeline-looping">
+                <div class="timeline-framenumbers">
+                    <span class="timeline-framenumber frame-num-start">0</span>
+                    <span class="timeline-framenumber frame-num-loop-start">...</span>
+                    <span class="timeline-framenumber frame-num-loop-end">...</span>
+                    <span class="timeline-framenumber frame-num-end">...</span>
+                </div>
+                <div class="timeline-container">
+                    <div class="timeline-segment segment-intro">
+                        <div class="timeline-progress-fill progress-intro"></div>
+                    </div>
+                    <div class="timeline-segment segment-loop">
+                        <div class="timeline-progress-fill progress-loop"></div>
+                    </div>
+                    <div class="timeline-segment segment-outro">
+                        <div class="timeline-progress-fill progress-outro"></div>
+                    </div>
+                    <div class="timeline-marker marker-start"></div>
+                    <div class="timeline-marker marker-end"></div>
+                    <div class="playhead-marker"></div>
+                </div>
+                <div class="timeline-labels">
+                    <span class="timeline-label label-intro">Intro</span>
+                    <span class="timeline-label label-loop">Loop</span>
+                    <span class="timeline-label label-outro">Outro</span>
+                </div>
+            </div>
+
+            <div class="toggle-container">
+                <span class="toggle-label">Light</span>
+                <label class="switch">
+                    <input type="checkbox" class="theme-toggle">
+                    <span class="slider round"></span>
+                </label>
+                <span class="toggle-label">Dark</span>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js" type="module"></script>
+</body>
+</html>
