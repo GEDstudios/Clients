@@ -1,0 +1,324 @@
+/* --- Base & Layout --- */
+body, html {
+    margin: 0;
+    padding: 32px;
+    background-color: #000;
+    font-family: monospace;
+    color: #ccc;
+    box-sizing: border-box;
+}
+
+.subtitle {
+    text-align: center;
+    font-weight: 700;
+    color: #ccc;
+    margin-bottom: 40px;
+    font-size: 1.5em;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#animation-sections-container {
+    width: 100%;
+}
+
+.section-container {
+    width: 100%;
+    max-width: 1800px;
+    margin: 0 auto 48px auto;
+}
+
+.section-container h3 {
+    font-size: 1.5em;
+    font-weight: 400;
+    color: #999;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.section-description {
+    font-size: 15px;
+    font-style: italic;
+    color: #999;
+    margin-top: -10px;
+    margin-bottom: 25px;
+    line-height: 1.5;
+}
+
+.animation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 40px;
+    width: 100%;
+    justify-content: center;
+}
+
+/* --- Animation Card --- */
+.animation-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #1a1a1a;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.lottie-title {
+    font-size: 14px;
+    color: #999;
+    margin-bottom: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: center;
+}
+
+.lottie-animation {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    cursor: pointer;
+    margin-bottom: 15px;
+    /* Flex centers the canvas if aspect ratio differs slightly */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* NEW: Ensure DotLottie Canvas fits the container */
+.lottie-animation canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+
+.frame-counter {
+    color: #ccc;
+    font-size: 16px;
+    height: 20px;
+    transition: color 0.3s ease;
+}
+
+/* --- Timeline --- */
+.timeline-container {
+    width: 100%;
+    height: 12px;
+    border-radius: 6px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    background-color: #333;
+    transition: background-color 0.3s ease;
+}
+
+.timeline-segment {
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    opacity: 0.4;
+    transition: opacity 0.1s ease-in-out;
+}
+
+.timeline-segment.active {
+    opacity: 1;
+}
+
+/* Segment Colors */
+.segment-intro { background-color: #41B1FF; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+.segment-loop { background-color: #5533FF; }
+.segment-outro { background-color: #9B87FF; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.segment-full { background-color: #5533FF; width: 100%; border-radius: 6px; }
+
+/* Progress Fill */
+.timeline-progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+}
+.progress-intro { background-color: #41B1FF; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+.progress-loop { background-color: #5533FF; }
+.progress-outro { background-color: #9B87FF; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.progress-full { background-color: #5533FF; opacity: 0.6; border-radius: 6px; }
+
+/* Timeline Markers */
+.timeline-marker {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: #000;
+    opacity: 0.5;
+    z-index: 1;
+}
+
+.playhead-marker {
+    position: absolute;
+    top: -2px;
+    left: 0%;
+    width: 2px;
+    height: 16px;
+    background-color: #fff;
+    border-radius: 1px;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s ease-in-out, background-color 0.3s ease;
+}
+
+/* Timeline Labels & Frame Numbers */
+.timeline-labels,
+.timeline-framenumbers {
+    width: 100%;
+    position: relative;
+    height: 20px;
+}
+
+.timeline-framenumbers {
+     font-size: 12px;
+     margin-top: 5px;
+}
+
+.timeline-labels {
+    font-size: 14px;
+}
+
+.timeline-label,
+.timeline-framenumber {
+    position: absolute;
+    color: #555;
+    transition: color 0.1s ease-in-out;
+}
+
+.timeline-label.active,
+.timeline-framenumber.active {
+    color: #fff;
+    font-weight: bold;
+}
+
+.label-intro, .frame-num-start { left: 0; }
+.label-loop { left: 50%; transform: translateX(-50%); }
+.label-outro, .frame-num-end { right: 0; }
+
+/* --- Playing State --- */
+.animation-wrapper.playing {
+    border-color: #5533FF;
+}
+
+/* Visual cue for Frozen state */
+.animation-wrapper.frozen-state {
+    border-color: #41B1FF; /* Light blue border when frozen */
+}
+
+/* --- Display Logic --- */
+.timeline-simple,
+.timeline-looping {
+    display: none;
+    width: 100%;
+}
+
+.animation-wrapper[data-timeline-type="simple"] .timeline-simple {
+    display: block;
+}
+
+.animation-wrapper[data-timeline-type="loop"] .timeline-looping {
+    display: block;
+}
+
+.feedback-note {
+    font-size: 11px;
+    color: #41B1FF;
+    margin-bottom: 10px;
+    text-align: center;
+    font-style: italic;
+    width: 100%;
+    opacity: 0.9;
+}/* --- GLOBAL NAVIGATION ADDITION --- */
+body {
+    padding-top: 80px !important; /* Pushes content down so Nav doesn't cover it */
+}
+
+.global-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    background-color: rgba(5, 5, 5, 0.85); /* Dark background with transparency */
+    backdrop-filter: blur(8px); /* Blur effect */
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    box-sizing: border-box;
+    z-index: 9999;
+}
+
+.nav-link {
+    text-decoration: none;
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: #5533FF; /* Your Brand Purple */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.nav-link:hover {
+    color: #fff;
+    transform: translateX(-4px);
+}
+
+.nav-brand {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    display: flex;
+    gap: 6px;
+}
+
+/* The "Animated & Developed by..." part */
+.brand-text {
+    color: #444; /* Dark grey, subtle */
+    transition: color 0.3s ease;
+}
+
+/* The "@ x10guy.studio" part */
+.brand-highlight {
+    color: #5533FF; /* Your Brand Purple */
+    font-weight: 700;
+    transition: text-shadow 0.3s ease, color 0.3s ease;
+}
+
+/* Hover Effects */
+.nav-brand:hover .brand-text {
+    color: #fff; /* Brighten text */
+}
+
+.nav-brand:hover .brand-highlight {
+    color: #7B61FF; /* Lighter Purple */
+    text-shadow: 0 0 10px rgba(85, 51, 255, 0.6); /* Purple Glow */
+}
+
+/* Mobile: Hide the long text, keep the studio name */
+@media (max-width: 650px) {
+    .brand-text { display: none; }
+}

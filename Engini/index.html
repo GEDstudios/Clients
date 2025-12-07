@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engini Animations Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --card-bg: #111111;
+            --border: #2a2a2a;
+            --text-main: #e0e0e0;
+            --text-muted: #fff;
+            
+            /* Brand Colors - Unified to Purple */
+            --purple: #5533FF;
+            --purple-glow: rgba(85, 51, 255, 0.3);
+            
+            --grid-line: rgba(255, 255, 255, 0.03);
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            /* Tech Grid Background */
+            background-image: 
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+            
+            font-family: 'Space Mono', monospace;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .main-container {
+            width: 100%;
+            max-width: 1200px;
+            padding: 40px;
+            box-sizing: border-box;
+            animation: fade-in 0.8s ease-out;
+        }
+
+        /* --- Header --- */
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+            position: relative;
+        }
+
+        .title {
+            font-size: 3em;
+            font-weight: 700;
+            letter-spacing: -2px;
+            margin: 0;
+            color: #fff;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 10px;
+            letter-spacing: 1px;
+        }
+
+        /* --- Layout Grid --- */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 30px;
+            align-items: stretch;
+        }
+
+        @media (max-width: 1000px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 650px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* --- Cards Common Styles --- */
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 30px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+        }
+
+        .card-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+
+        /* --- Navigation Area --- */
+        .nav-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+        }
+
+        /* Primary Button (Hero Link) */
+        .nav-item.primary {
+            text-decoration: none;
+            background: linear-gradient(145deg, #1a1a1a, #111);
+            border: 1px solid #333;
+            padding: 30px;
+            border-radius: 4px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            overflow: hidden;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .nav-item.primary::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background-color: var(--purple);
+            box-shadow: 0 0 15px var(--purple);
+            transition: width 0.3s ease;
+        }
+
+        .nav-item.primary:hover {
+            transform: translateX(5px);
+            border-color: var(--purple);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        .nav-item.primary:hover::before {
+            width: 6px;
+        }
+
+        /* --- Tags & Text --- */
+        .version-tag {
+            font-size: 40px;
+            font-weight: 700;
+            color: #fff;
+            margin: 0;
+            letter-spacing: -2px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .version-tag .sub {
+            font-size: 12px;
+            color: var(--purple);
+            font-weight: 400;
+            letter-spacing: 2px;
+            border: 1px solid var(--purple);
+            padding: 4px 8px;
+            border-radius: 20px;
+            background: rgba(85, 51, 255, 0.1);
+        }
+
+        .version-desc {
+            color: #888;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .open-link {
+            margin-top: 20px; 
+            font-size: 12px; 
+            color: var(--purple); 
+            text-align: right;
+            font-weight: bold;
+        }
+
+        /* Secondary Button (Archive Link) */
+        .nav-item.secondary {
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 20px;
+            border: 1px solid #222;
+            background: transparent;
+            color: #555;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item.secondary:hover {
+            border-color: #444;
+            color: #999;
+            background: #151515;
+        }
+
+        .nav-item.secondary .v-title {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .nav-item.secondary .v-date {
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        /* --- Animations --- */
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        
+        <header class="header">
+            <h1 class="title">Engini Preview</h1>
+            <div class="subtitle">Internal Animation Repository</div>
+        </header>
+
+        <div class="dashboard-grid">
+            
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Logo Animations</span>
+                </div>
+
+                <div class="nav-container">
+                    <a href="Logo/V3" class="nav-item primary">
+                        <div class="version-tag">
+                            LOGO.V3 
+                            <span class="sub">LOTTIE</span>
+                        </div>
+                        <div class="version-desc">
+                            New big logo, Updated to .lottie.
+                        </div>
+                        <div class="open-link">
+                            OPEN PROJECT &rarr;
+                        </div>
+                    </a>
+
+                    <a href="Logo/V2" class="nav-item secondary">
+                        <span class="v-title">ARCHIVE // V2</span>
+                        <span class="v-date">Previous</span>
+                    </a>
+
+                    <a href="Logo/V1" class="nav-item secondary">
+                        <span class="v-title">ARCHIVE // V1</span>
+                        <span class="v-date">Legacy</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Hexagon Animations</span>
+                </div>
+
+                <div class="nav-container">
+                    <a href="Hexagons/V2" class="nav-item primary">
+                        <div class="version-tag">
+                            HEX.V2
+                            <span class="sub">LOTTIE</span>
+                        </div>
+                        <div class="version-desc">
+                            Updated to .lottie.
+                        </div>
+                        <div class="open-link">
+                            OPEN PROJECT &rarr;
+                        </div>
+                    </a>
+
+                    <a href="Hexagons/V1" class="nav-item secondary">
+                        <span class="v-title">ARCHIVE // HEX 1</span>
+                        <span class="v-date">Legacy</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">UI Animations</span>
+                </div>
+
+                <div class="nav-container">
+                    <a href="UI/V1" class="nav-item primary">
+                        <div class="version-tag">
+                            UI
+                            <span class="sub">FULL WIDTH</span>
+                        </div>
+                        <div class="version-desc">
+                            
+                        </div>
+                        <div class="open-link">
+                            OPEN PROJECT &rarr;
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>
