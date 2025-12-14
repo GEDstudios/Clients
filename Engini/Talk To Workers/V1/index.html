@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talk To Workers Animations</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/@dotlottie/player-component@latest/dist/dotlottie-player.mjs" type="module"></script>
+</head>
+<body>
+<nav class="global-nav">
+    <a href="../../" class="nav-link">
+        <span>&larr;</span> Home
+    </a>
+    
+    <a class="nav-brand" href="https://x10guy.studio" target="_blank">
+        <span class="brand-text">Animated & Developed by Guy Ekstein</span>
+        <span class="brand-highlight">@ x10guy.studio</span>
+    </a>
+</nav>
+    <h2 class="subtitle">Talk To Workers ANIMATIONS PREVIEW</h2>
+
+    <main id="animation-sections-container"></main>
+
+    <template id="lottie-card-template">
+        <div class="animation-wrapper">
+            <div class="lottie-header">
+                <div class="lottie-title">Animation Title</div>
+                <div class="frame-counter">Frame: 0</div>
+            </div>
+            
+            <div class="lottie-container"></div> 
+            
+            <div class="timeline-simple">
+                <div class="timeline-container">
+                    <div class="timeline-segment segment-full active">
+                        <div class="timeline-progress-fill progress-full"></div>
+                    </div>
+                    <div class="playhead-marker"></div>
+                </div>
+                <div class="timeline-framenumbers">
+                    <span class="timeline-framenumber frame-num-start">0</span>
+                    <span class="timeline-framenumber frame-num-end">...</span>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>
