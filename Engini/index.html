@@ -43,7 +43,8 @@
 
         .main-container {
             width: 100%;
-            max-width: 1200px;
+            /* UPDATED: Increased width to accommodate 4 columns comfortably */
+            max-width: 1600px;
             padding: 40px;
             box-sizing: border-box;
             animation: fade-in 0.8s ease-out;
@@ -75,12 +76,14 @@
         /* --- Layout Grid --- */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr); 
+            /* UPDATED: Changed from 3 to 4 columns */
+            grid-template-columns: repeat(4, 1fr); 
             gap: 30px;
             align-items: stretch;
         }
 
-        @media (max-width: 1000px) {
+        /* UPDATED: Adjusted breakpoint to switch to 2 columns sooner so cards don't get too thin */
+        @media (max-width: 1300px) {
             .dashboard-grid {
                 grid-template-columns: 1fr 1fr;
             }
@@ -170,7 +173,8 @@
 
         /* --- Tags & Text --- */
         .version-tag {
-            font-size: 40px;
+            /* UPDATED: Reduced font size slightly to prevent wrapping in narrower columns */
+            font-size: 32px; 
             font-weight: 700;
             color: #fff;
             margin: 0;
@@ -178,6 +182,7 @@
             display: flex;
             align-items: center;
             gap: 15px;
+            flex-wrap: wrap; /* Allows tag to wrap if needed */
         }
 
         .version-tag .sub {
@@ -189,6 +194,7 @@
             padding: 4px 8px;
             border-radius: 20px;
             background: rgba(85, 51, 255, 0.1);
+            white-space: nowrap;
         }
 
         .version-desc {
@@ -331,6 +337,26 @@
                 </div>
             </div>
 
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Talk To Workers Animations</span>
+                </div>
+
+                <div class="nav-container">
+                    <a href="Talk To Workers/V1/" class="nav-item primary">
+                        <div class="version-tag">
+                            Talk To Workers
+                            <span class="sub">FULL WIDTH</span>
+                        </div>
+                        <div class="version-desc">
+                            
+                        </div>
+                        <div class="open-link">
+                            OPEN PROJECT &rarr;
+                        </div>
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
