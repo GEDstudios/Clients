@@ -86,6 +86,20 @@ dotlottie-player {
     display: block;
 }
 
+/* --- Mobile Variant Override --- */
+/* Ensures vertical mobile layouts don't blow out the screen */
+.mobile-variant dotlottie-player {
+    width: auto;       /* Stop it from forcing full width */
+    max-width: 100%;   /* Safety check */
+    max-height: 70vh;  /* Limit height to 70% of viewport */
+    margin: 0 auto;    /* Center it horizontally */
+}
+
+.mobile-variant .lottie-container {
+    display: flex;     /* Needed to center the player inside container */
+    justify-content: center;
+}
+
 /* --- Timeline Styles --- */
 .timeline-simple {
     display: block;

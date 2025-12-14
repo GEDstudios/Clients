@@ -11,6 +11,8 @@
             id: 'ui-list',
             animations: [
                 { fileName: "Electricity.lottie" },
+                // Added isMobile flag here
+                { fileName: "Electricity_Mobile.lottie", isMobile: true },
                 { fileName: "UI_1.lottie" },
                 { fileName: "UI_2.lottie" },
                 { fileName: "UI_3.lottie", isTBD: true },
@@ -26,7 +28,7 @@
             this.animationData = animationData;
             this.container = wrapper.querySelector('.lottie-container');
 
-            this.player = null; // Will hold the <dotlottie-player> element
+            this.player = null; 
             this.totalFrames = 0;
             
             this.ui = {
@@ -41,28 +43,19 @@
         }
 
         initPlayer() {
-            // Create the DotLottie Web Component
             this.player = document.createElement('dotlottie-player');
-            
-            // Set attributes
             this.player.src = `Lotties/${this.animationData.fileName}`;
             this.player.setAttribute('loop', '');
             this.player.setAttribute('autoplay', '');
             this.player.setAttribute('background', 'transparent');
             
-            // Append to DOM
             this.container.appendChild(this.player);
 
-            // Add Event Listeners
-            // 'ready' fires when the .lottie file is fully parsed
             this.player.addEventListener('ready', this.onReady.bind(this));
-            
-            // 'frame' fires on every frame update
             this.player.addEventListener('frame', this.onFrame.bind(this));
         }
 
         onReady() {
-            // Access the underlying lottie instance to get totalFrames
             const lottieInstance = this.player.getLottie();
             if (lottieInstance) {
                 this.totalFrames = lottieInstance.totalFrames;
@@ -75,17 +68,13 @@
         }
 
         onFrame(e) {
-            // e.detail.frame contains the current frame number
             const currentFrame = Math.floor(e.detail.frame);
-            
             if (this.totalFrames === 0) return;
 
-            // Update Text
             if (this.ui.frameCounter) {
                 this.ui.frameCounter.textContent = `Frame: ${currentFrame}`;
             }
 
-            // Update Timeline Visuals
             const progressPercent = (currentFrame / this.totalFrames) * 100;
             
             if (this.ui.playheadMarker) {
@@ -132,6 +121,11 @@
             const wrapper = cardFragment.querySelector('.animation-wrapper');
             
             if (!wrapper) return;
+
+            // Apply special class if it's a mobile layout
+            if (animationData.isMobile) {
+                wrapper.classList.add('mobile-variant');
+            }
 
             const titleEl = wrapper.querySelector('.lottie-title');
             let title = animationData.fileName
