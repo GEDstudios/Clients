@@ -7,7 +7,7 @@ function injectNavigation(config) {
     const rootDepth = config.navDepth || "../../";
     const isLanding = config.type === 'landing';
     const logoPath = `${rootDepth}Assets/logo.svg`;
-    const backLink = config.homePath || "../../index.html";
+    const backLink = config.homePath || "../../";
 
     const nav = document.createElement('nav');
     nav.className = 'global-nav';
