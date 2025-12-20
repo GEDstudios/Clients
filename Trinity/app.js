@@ -54,17 +54,17 @@ import { DotLottie } from 'https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-w
             description: '',
             animations: [
                 { 
-                    fileName: "Slide_Gradients.lottie",
+                    fileName: "Mobile/Slide_Gradients.lottie",
                     folder: "Unique",
                     feedback: "Continuous Loop"
                 },
                 { 
-                    fileName: "Slide_Squares.lottie",
+                    fileName: "Mobile/Slide_Squares.lottie",
                     folder: "Unique",
                     feedback: "Continuous Loop"
                 },
                 { 
-                    fileName: "Slide_Stroke.lottie",
+                    fileName: "Mobile/Slide_Stroke.lottie",
                     folder: "Unique",
                     feedback: "Continuous Loop"
                 },
