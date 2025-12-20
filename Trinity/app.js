@@ -50,7 +50,7 @@ import { DotLottie } from 'https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-w
         },
         {
             id: 'slides-section',
-            title: 'Slides & Unique',
+            title: 'Slides',
             description: '',
             animations: [
                 { 
