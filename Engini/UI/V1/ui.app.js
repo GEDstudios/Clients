@@ -15,7 +15,7 @@
                 { fileName: "Electricity_Mobile.lottie", isMobile: true },
                 { fileName: "UI_1.lottie" },
                 { fileName: "UI_2.lottie" },
-                { fileName: "UI_3.lottie", isTBD: true },
+                { fileName: "UI_3.lottie" },
                 { fileName: "UI_4.lottie" },
                 { fileName: "UI_5.lottie" }
             ]
