@@ -1,0 +1,416 @@
+/* --- Base & Layout --- */
+body, html {
+    margin: 0;
+    padding: 32px;
+    background-color: #000;
+    font-family: monospace;
+    color: #ccc;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+/* --- UPDATED HERO SECTION STYLES --- */
+#hero-section {
+    /* Calculate full width relative to body padding (32px left + 32px right) */
+    width: calc(100% + 64px);
+    margin-left: -32px;
+    margin-right: -32px;
+    
+    margin-bottom: 60px; /* Space between hero and grid */
+    
+    background-color: #000 !important; /* Force black background */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    
+    /* Border to separate from the header text visually */
+    border-top: 1px solid #222; 
+    border-bottom: 1px solid #222;
+}
+
+#hero-section .lottie-animation {
+    width: 100%;
+    max-width: 100%; 
+    height: auto;
+    max-height: 80vh; 
+    aspect-ratio: auto;
+    margin: 0;
+}
+
+/* Hero Controls (Minimal) */
+#hero-section .hero-controls {
+    padding: 15px;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    background-color: #000;
+    border-top: 1px solid #111;
+}
+
+.subtitle {
+    text-align: center;
+    font-weight: 700;
+    color: #ccc;
+    margin-bottom: 40px;
+    font-size: 1.5em;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#animation-sections-container {
+    width: 100%;
+}
+
+.section-container {
+    width: 100%;
+    max-width: 1800px;
+    margin: 0 auto 48px auto;
+}
+
+.section-container h3 {
+    font-size: 1.5em;
+    font-weight: 400;
+    color: #999;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.section-description {
+    font-size: 15px;
+    font-style: italic;
+    color: #999;
+    margin-top: -10px;
+    margin-bottom: 25px;
+    line-height: 1.5;
+    transition: color 0.3s ease;
+}
+
+.animation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 40px;
+    width: 100%;
+    justify-content: center;
+}
+
+/* --- Animation Card --- */
+.animation-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #1a1a1a;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+    border: 1px solid transparent;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.lottie-title {
+    font-size: 14px;
+    color: #999;
+    margin-bottom: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: center;
+}
+
+.lottie-animation {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    cursor: pointer;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.lottie-animation canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+}
+
+.frame-counter {
+    color: #ccc;
+    font-size: 16px;
+    height: 20px;
+    transition: color 0.3s ease;
+}
+
+/* --- Theme Toggle --- */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-top: 20px;
+}
+
+#hero-section .toggle-container {
+    margin-top: 0; /* Remove top margin for hero toggle */
+}
+
+.toggle-label {
+    font-size: 14px;
+    color: #888;
+    transition: color 0.3s ease;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+    margin: 0 10px;
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #333;
+    transition: .4s;
+    clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 5px;
+    bottom: 5px;
+    background-color: #f0f0f0;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background-color: #333;
+}
+
+input:checked + .slider:before {
+    transform: translateX(22px);
+}
+
+/* --- Timeline --- */
+.timeline-container {
+    width: 100%;
+    height: 12px;
+    border-radius: 6px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    background-color: #333;
+    transition: background-color 0.3s ease;
+}
+
+.timeline-segment {
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    opacity: 0.4;
+    transition: opacity 0.1s ease-in-out;
+}
+
+.timeline-segment.active { opacity: 1; }
+
+.segment-intro { background-color: #41B1FF; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+.segment-loop { background-color: #5533FF; }
+.segment-outro { background-color: #9B87FF; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.segment-full { background-color: #5533FF; width: 100%; border-radius: 6px; }
+
+.timeline-progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0%;
+}
+.progress-intro { background-color: #41B1FF; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+.progress-loop { background-color: #5533FF; }
+.progress-outro { background-color: #9B87FF; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+.progress-full { background-color: #5533FF; opacity: 0.6; border-radius: 6px; }
+
+.timeline-marker {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background-color: #000;
+    opacity: 0.5;
+    z-index: 1;
+}
+
+.playhead-marker {
+    position: absolute;
+    top: -2px;
+    left: 0%;
+    width: 2px;
+    height: 16px;
+    background-color: #fff;
+    border-radius: 1px;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s ease-in-out, background-color 0.3s ease;
+}
+
+.timeline-labels,
+.timeline-framenumbers {
+    width: 100%;
+    position: relative;
+    height: 20px;
+}
+
+.timeline-framenumbers { font-size: 12px; margin-top: 5px; }
+.timeline-labels { font-size: 14px; }
+
+.timeline-label,
+.timeline-framenumber {
+    position: absolute;
+    color: #555;
+    transition: color 0.1s ease-in-out;
+}
+
+.timeline-label.active,
+.timeline-framenumber.active {
+    color: #fff;
+    font-weight: bold;
+}
+
+.label-intro, .frame-num-start { left: 0; }
+.label-loop { left: 50%; transform: translateX(-50%); }
+.label-outro, .frame-num-end { right: 0; }
+
+/* --- Light Mode --- */
+.animation-wrapper.light-mode {
+    background-color: #f0f0f0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.animation-wrapper.light-mode .section-description { color: #555; }
+.animation-wrapper.light-mode .lottie-title,
+.animation-wrapper.light-mode .toggle-label { color: #555; }
+.animation-wrapper.light-mode .frame-counter { color: #1a1a1a; }
+.animation-wrapper.light-mode .timeline-container { background-color: #ddd; }
+.animation-wrapper.light-mode .timeline-marker { background-color: #fff; }
+.animation-wrapper.light-mode .playhead-marker { background-color: #fff; }
+.animation-wrapper.light-mode .timeline-label,
+.animation-wrapper.light-mode .timeline-framenumber { color: #888; }
+.animation-wrapper.light-mode .timeline-label.active,
+.animation-wrapper.light-mode .timeline-framenumber.active { color: #000; }
+.animation-wrapper.light-mode .feedback-note { color: #5533FF; }
+
+.animation-wrapper.playing { border-color: #5533FF; }
+
+.timeline-simple, .timeline-looping { display: none; width: 100%; }
+.animation-wrapper[data-timeline-type="simple"] .timeline-simple { display: block; }
+.animation-wrapper[data-timeline-type="loop"] .timeline-looping { display: block; }
+
+.feedback-note {
+    font-size: 11px;
+    color: #41B1FF;
+    margin-bottom: 10px;
+    text-align: center;
+    font-style: italic;
+    width: 100%;
+    opacity: 0.9;
+}/* --- GLOBAL NAVIGATION ADDITION --- */
+body {
+    padding-top: 80px !important; /* Pushes content down so Nav doesn't cover it */
+}
+
+.global-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    background-color: rgba(5, 5, 5, 0.85); /* Dark background with transparency */
+    backdrop-filter: blur(8px); /* Blur effect */
+    border-bottom: 1px solid #333;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    box-sizing: border-box;
+    z-index: 9999;
+}
+
+.nav-link {
+    text-decoration: none;
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: #5533FF; /* Your Brand Purple */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.nav-link:hover {
+    color: #fff;
+    transform: translateX(-4px);
+}
+
+.nav-brand {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    text-decoration: none;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    display: flex;
+    gap: 6px;
+}
+
+/* The "Animated & Developed by..." part */
+.brand-text {
+    color: #444; /* Dark grey, subtle */
+    transition: color 0.3s ease;
+}
+
+/* The "@ x10guy.studio" part */
+.brand-highlight {
+    color: #5533FF; /* Your Brand Purple */
+    font-weight: 700;
+    transition: text-shadow 0.3s ease, color 0.3s ease;
+}
+
+/* Hover Effects */
+.nav-brand:hover .brand-text {
+    color: #fff; /* Brighten text */
+}
+
+.nav-brand:hover .brand-highlight {
+    color: #7B61FF; /* Lighter Purple */
+    text-shadow: 0 0 10px rgba(85, 51, 255, 0.6); /* Purple Glow */
+}
+
+/* Mobile: Hide the long text, keep the studio name */
+@media (max-width: 650px) {
+    .brand-text { display: none; }
+}
