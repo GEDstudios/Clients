@@ -1,46 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rive Scroll States</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #0A0A3F;
-            overflow: hidden; 
-            overscroll-behavior-y: none; 
-            touch-action: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        #rive-container {
-            width: 1920px; 
-            height: 1080px;
-            max-width: 100vw;
-            max-height: 100vh;
-        }
-        canvas {
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* Prevents Rive from intercepting touch events */
-        }
-    </style>
-</head>
-<body>
-
-    <div id="rive-container">
-        <canvas id="canvas"></canvas>
-    </div>
-
-    <script src="https://unpkg.com/@rive-app/webgl2/rive.js"></script>
+<script src="https://unpkg.com/@rive-app/webgl2/rive.js"></script>
     <script>
         let currentState = 0; 
         let isThrottled = false;
-        let updateBools = () => {}; // Placeholder until Rive loads
+        let updateBools = () => {}; 
 
         const changeState = (direction) => {
             if (isThrottled) return;
@@ -69,22 +31,24 @@
 
         // Mobile Touch
         let touchStartY = 0;
+        let hasSwiped = false; // Prevents multiple triggers in a single drag
 
         document.addEventListener('touchstart', (e) => {
             touchStartY = e.touches[0].clientY;
+            hasSwiped = false; // Reset when finger touches screen
         }, { passive: false });
 
         document.addEventListener('touchmove', (e) => {
             e.preventDefault(); 
             
+            if (hasSwiped) return; // Stop if already swiped during this touch
+
             let touchCurrentY = e.touches[0].clientY;
             let deltaY = touchStartY - touchCurrentY;
 
-            // 40px swipe threshold
-            if (Math.abs(deltaY) > 40) {
+            if (Math.abs(deltaY) > 50) { // Increased threshold slightly for intent
                 changeState(deltaY > 0 ? 1 : -1);
-                // Reset origin to prevent rapid firing or queued swipes while throttled
-                touchStartY = touchCurrentY; 
+                hasSwiped = true; // Lock until finger is lifted
             }
         }, { passive: false });
 
@@ -117,5 +81,3 @@
             if (riveInstance) riveInstance.resizeDrawingSurfaceToCanvas();
         });
     </script>
-</body>
-</html>
