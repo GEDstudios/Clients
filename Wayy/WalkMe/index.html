@@ -9,8 +9,7 @@
             margin: 0;
             padding: 0;
             background-color: #0A0A3F;
-            overflow: hidden; /* Blocks native scroll */
-            /* Prevents pull-to-refresh and overscroll on mobile */
+            overflow: hidden; 
             overscroll-behavior-y: none; 
             touch-action: none;
             display: flex;
@@ -19,7 +18,6 @@
             height: 100vh;
         }
         #rive-container {
-            /* Defined size prevents pixelation */
             width: 800px; 
             height: 800px;
             max-width: 100vw;
@@ -53,7 +51,6 @@
                 const inputM = inputs.find(i => i.name === 'M');
                 const inputR = inputs.find(i => i.name === 'R');
 
-                // State index: 0 = L, 1 = M, 2 = R
                 let currentState = 0; 
                 let isThrottled = false;
 
@@ -63,35 +60,32 @@
                     if (inputR) inputR.value = (currentState === 2);
                 };
 
-                updateBools(); // Initialize L as active
+                updateBools(); 
 
-                // Centralized function to handle state changes
                 const changeState = (direction) => {
                     if (isThrottled) return;
 
                     let changed = false;
                     
                     if (direction === 1 && currentState < 2) {
-                        currentState++; // Scroll/Swipe down: L -> M -> R
+                        currentState++; 
                         changed = true;
                     } else if (direction === -1 && currentState > 0) {
-                        currentState--; // Scroll/Swipe up: R -> M -> L
+                        currentState--; 
                         changed = true;
                     }
 
                     if (changed) {
                         updateBools();
                         isThrottled = true;
-                        setTimeout(() => { isThrottled = false; }, 600); // 600ms debounce
+                        setTimeout(() => { isThrottled = false; }, 600); 
                     }
                 };
 
-                // Desktop wheel event
                 window.addEventListener('wheel', (e) => {
                     changeState(e.deltaY > 0 ? 1 : -1);
                 }, { passive: false });
 
-                // Mobile touch events
                 let touchStartY = 0;
 
                 window.addEventListener('touchstart', (e) => {
@@ -99,20 +93,22 @@
                 }, { passive: false });
 
                 window.addEventListener('touchmove', (e) => {
-                    e.preventDefault(); // Strictly block native scroll/bounce
-                }, { passive: false });
+                    e.preventDefault(); 
+                    
+                    if (isThrottled) return;
 
-                window.addEventListener('touchend', (e) => {
-                    let touchEndY = e.changedTouches[0].clientY;
-                    let deltaY = touchStartY - touchEndY;
+                    let touchCurrentY = e.touches[0].clientY;
+                    let deltaY = touchStartY - touchCurrentY;
 
-                    // 30px threshold to distinguish a swipe from a tap
-                    if (deltaY > 30) {
-                        changeState(1); // Swiped up -> triggers scroll down logic
-                    } else if (deltaY < -30) {
-                        changeState(-1); // Swiped down -> triggers scroll up logic
+                    // Trigger state change during the drag
+                    if (deltaY > 40) {
+                        changeState(1); 
+                        touchStartY = touchCurrentY; // Reset to prevent rapid double-firing
+                    } else if (deltaY < -40) {
+                        changeState(-1); 
+                        touchStartY = touchCurrentY;
                     }
-                });
+                }, { passive: false });
             }
         });
 
