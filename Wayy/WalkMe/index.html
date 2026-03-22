@@ -26,6 +26,7 @@
         canvas {
             width: 100%;
             height: 100%;
+            pointer-events: none; /* Prevents Rive from intercepting touch events */
         }
     </style>
 </head>
@@ -37,6 +38,57 @@
 
     <script src="https://unpkg.com/@rive-app/webgl2/rive.js"></script>
     <script>
+        let currentState = 0; 
+        let isThrottled = false;
+        let updateBools = () => {}; // Placeholder until Rive loads
+
+        const changeState = (direction) => {
+            if (isThrottled) return;
+
+            let changed = false;
+            
+            if (direction === 1 && currentState < 2) {
+                currentState++; 
+                changed = true;
+            } else if (direction === -1 && currentState > 0) {
+                currentState--; 
+                changed = true;
+            }
+
+            if (changed) {
+                updateBools();
+                isThrottled = true;
+                setTimeout(() => { isThrottled = false; }, 600); 
+            }
+        };
+
+        // Desktop Wheel
+        document.addEventListener('wheel', (e) => {
+            changeState(e.deltaY > 0 ? 1 : -1);
+        }, { passive: false });
+
+        // Mobile Touch
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault(); 
+            
+            let touchCurrentY = e.touches[0].clientY;
+            let deltaY = touchStartY - touchCurrentY;
+
+            // 40px swipe threshold
+            if (Math.abs(deltaY) > 40) {
+                changeState(deltaY > 0 ? 1 : -1);
+                // Reset origin to prevent rapid firing or queued swipes while throttled
+                touchStartY = touchCurrentY; 
+            }
+        }, { passive: false });
+
+        // Initialize Rive
         const riveInstance = new rive.Rive({
             src: 'rotategirl2.riv',
             canvas: document.getElementById('canvas'),
@@ -51,64 +103,13 @@
                 const inputM = inputs.find(i => i.name === 'M');
                 const inputR = inputs.find(i => i.name === 'R');
 
-                let currentState = 0; 
-                let isThrottled = false;
-
-                const updateBools = () => {
+                updateBools = () => {
                     if (inputL) inputL.value = (currentState === 0);
                     if (inputM) inputM.value = (currentState === 1);
                     if (inputR) inputR.value = (currentState === 2);
                 };
 
                 updateBools(); 
-
-                const changeState = (direction) => {
-                    if (isThrottled) return;
-
-                    let changed = false;
-                    
-                    if (direction === 1 && currentState < 2) {
-                        currentState++; 
-                        changed = true;
-                    } else if (direction === -1 && currentState > 0) {
-                        currentState--; 
-                        changed = true;
-                    }
-
-                    if (changed) {
-                        updateBools();
-                        isThrottled = true;
-                        setTimeout(() => { isThrottled = false; }, 600); 
-                    }
-                };
-
-                window.addEventListener('wheel', (e) => {
-                    changeState(e.deltaY > 0 ? 1 : -1);
-                }, { passive: false });
-
-                let touchStartY = 0;
-
-                window.addEventListener('touchstart', (e) => {
-                    touchStartY = e.touches[0].clientY;
-                }, { passive: false });
-
-                window.addEventListener('touchmove', (e) => {
-                    e.preventDefault(); 
-                    
-                    if (isThrottled) return;
-
-                    let touchCurrentY = e.touches[0].clientY;
-                    let deltaY = touchStartY - touchCurrentY;
-
-                    // Trigger state change during the drag
-                    if (deltaY > 40) {
-                        changeState(1); 
-                        touchStartY = touchCurrentY; // Reset to prevent rapid double-firing
-                    } else if (deltaY < -40) {
-                        changeState(-1); 
-                        touchStartY = touchCurrentY;
-                    }
-                }, { passive: false });
             }
         });
 
