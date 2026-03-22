@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rive Scroll Switch</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0A0A3F;
+            overflow: hidden; /* Blocks native scrolling */
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="riveCanvas"></canvas>
+
+    <script src="https://unpkg.com/@rive-app/canvas"></script>
+    <script>
+        const canvas = document.getElementById('riveCanvas');
+        const stateMachineName = 'State Machine 1'; // Update if your State Machine name is different
+        const stateSequence = ['L', 'M', 'R'];
+        
+        let currentStateIndex = 0; // Starts at 'L'
+        let lastScrollTime = 0;
+        let riveInputs = {};
+
+        const r = new rive.Rive({
+            src: 'rotategirl2.riv',
+            canvas: canvas,
+            autoplay: true,
+            stateMachines: stateMachineName,
+            onLoad: () => {
+                r.resizeDrawingSurfaceToCanvas();
+                
+                // Fetch and map inputs
+                const inputs = r.stateMachineInputs(stateMachineName);
+                inputs.forEach(input => {
+                    if (stateSequence.includes(input.name)) {
+                        riveInputs[input.name] = input;
+                    }
+                });
+
+                updateRiveState(currentStateIndex);
+            }
+        });
+
+        // Enforce mutually exclusive booleans
+        function updateRiveState(index) {
+            stateSequence.forEach((stateName, i) => {
+                if (riveInputs[stateName]) {
+                    riveInputs[stateName].value = (i === index);
+                }
+            });
+        }
+
+        // Handle wheel events
+        window.addEventListener('wheel', (e) => {
+            e.preventDefault(); // Prevent page scroll
+
+            const now = Date.now();
+            if (now - lastScrollTime < 500) return; // 500ms debounce to prevent skipping
+
+            // Scroll down: increase index (max 2: 'R')
+            if (e.deltaY > 0 && currentStateIndex < 2) {
+                currentStateIndex++;
+                updateRiveState(currentStateIndex);
+                lastScrollTime = now;
+            } 
+            // Scroll up: decrease index (min 0: 'L')
+            else if (e.deltaY < 0 && currentStateIndex > 0) {
+                currentStateIndex--;
+                updateRiveState(currentStateIndex);
+                lastScrollTime = now;
+            }
+        }, { passive: false }); // passive: false is required to allow e.preventDefault()
+
+        // Handle resizing
+        window.addEventListener('resize', () => {
+            r.resizeDrawingSurfaceToCanvas();
+        });
+    </script>
+</body>
+</html>
