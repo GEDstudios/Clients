@@ -1,92 +1,157 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rive Scroll Switch</title>
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #0A0A3F;
-            overflow: hidden; /* Blocks native scrolling */
-        }
-        canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rotate Girl</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0A0A3F;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #rive-container {
+      width: 600px;
+      height: 600px;
+      position: relative;
+    }
+
+    #rive-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
 </head>
 <body>
-    <canvas id="riveCanvas"></canvas>
+  <div id="rive-container">
+    <canvas id="rive-canvas"></canvas>
+  </div>
 
-    <script src="https://unpkg.com/@rive-app/canvas"></script>
-    <script>
-        const canvas = document.getElementById('riveCanvas');
-        const stateMachineName = 'State Machine 1'; // Update if your State Machine name is different
-        const stateSequence = ['L', 'M', 'R'];
-        
-        let currentStateIndex = 0; // Starts at 'L'
-        let lastScrollTime = 0;
-        let riveInputs = {};
+  <!-- WebGL2 renderer — required for vector blur support -->
+  <script src="https://unpkg.com/@rive-app/webgl2@2.23.8/rive.js"></script>
 
-        const r = new rive.Rive({
-            src: 'rotategirl2.riv',
-            canvas: canvas,
-            autoplay: true,
-            stateMachines: stateMachineName,
-            onLoad: () => {
-                r.resizeDrawingSurfaceToCanvas();
-                
-                // Fetch and map inputs
-                const inputs = r.stateMachineInputs(stateMachineName);
-                inputs.forEach(input => {
-                    if (stateSequence.includes(input.name)) {
-                        riveInputs[input.name] = input;
-                    }
-                });
+  <script>
+    const canvas = document.getElementById('rive-canvas');
 
-                updateRiveState(currentStateIndex);
-            }
+    // Match canvas pixel dimensions to its CSS size × device pixel ratio
+    // so the output is never blurry / pixelated.
+    function resizeCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width  = Math.round(rect.width  * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // ── State tracking ──────────────────────────────────────────────
+    // 0 = L, 1 = M, 2 = R
+    let currentState = 0;
+    let inputs = {};   // will hold { L, M, R } SMInput references
+    let isReady = false;
+
+    function applyState(idx) {
+      if (!isReady) return;
+      // Turn ALL off first, then enable the active one — guarantees
+      // only one bool is true at any moment.
+      inputs.L.value = false;
+      inputs.M.value = false;
+      inputs.R.value = false;
+
+      if      (idx === 0) inputs.L.value = true;
+      else if (idx === 1) inputs.M.value = true;
+      else if (idx === 2) inputs.R.value = true;
+
+      currentState = idx;
+    }
+
+    // ── Rive setup ──────────────────────────────────────────────────
+    const r = new rive.Rive({
+      src: 'rotategirl2.riv',
+      canvas: canvas,
+      artboard: 'Artboard',
+      stateMachines: 'State Machine 1',
+      // @rive-app/webgl2 bundle uses WebGL2 automatically — no rendererType needed
+      autoplay: true,
+      onLoad: () => {
+        const allInputs = r.stateMachineInputs('State Machine 1');
+
+        allInputs.forEach(inp => {
+          if (inp.name === 'L') inputs.L = inp;
+          if (inp.name === 'M') inputs.M = inp;
+          if (inp.name === 'R') inputs.R = inp;
         });
 
-        // Enforce mutually exclusive booleans
-        function updateRiveState(index) {
-            stateSequence.forEach((stateName, i) => {
-                if (riveInputs[stateName]) {
-                    riveInputs[stateName].value = (i === index);
-                }
-            });
-        }
+        isReady = true;
+        // Set initial state: L on, others off
+        applyState(0);
+      }
+    });
 
-        // Handle wheel events
-        window.addEventListener('wheel', (e) => {
-            e.preventDefault(); // Prevent page scroll
+    // ── Scroll → state transitions (no page scroll) ─────────────────
+    let scrollLocked = false;
 
-            const now = Date.now();
-            if (now - lastScrollTime < 500) return; // 500ms debounce to prevent skipping
+    function onScroll(delta) {
+      if (!isReady || scrollLocked) return;
 
-            // Scroll down: increase index (max 2: 'R')
-            if (e.deltaY > 0 && currentStateIndex < 2) {
-                currentStateIndex++;
-                updateRiveState(currentStateIndex);
-                lastScrollTime = now;
-            } 
-            // Scroll up: decrease index (min 0: 'L')
-            else if (e.deltaY < 0 && currentStateIndex > 0) {
-                currentStateIndex--;
-                updateRiveState(currentStateIndex);
-                lastScrollTime = now;
-            }
-        }, { passive: false }); // passive: false is required to allow e.preventDefault()
+      const next = delta > 0
+        ? Math.min(currentState + 1, 2)   // scroll down → advance
+        : Math.max(currentState - 1, 0);  // scroll up   → retreat
 
-        // Handle resizing
-        window.addEventListener('resize', () => {
-            r.resizeDrawingSurfaceToCanvas();
-        });
-    </script>
+      if (next === currentState) return;
+
+      applyState(next);
+
+      // Brief cooldown so a single fast swipe counts as one step
+      scrollLocked = true;
+      setTimeout(() => { scrollLocked = false; }, 600);
+    }
+
+    // Mouse wheel
+    window.addEventListener('wheel', e => {
+      e.preventDefault();
+      onScroll(e.deltaY);
+    }, { passive: false });
+
+    // Touch swipe
+    let touchStartY = null;
+    window.addEventListener('touchstart', e => {
+      touchStartY = e.touches[0].clientY;
+    }, { passive: false });
+
+    window.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (touchStartY === null) return;
+      const dy = touchStartY - e.touches[0].clientY;
+      if (Math.abs(dy) > 30) {
+        onScroll(dy);
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: false });
+
+    window.addEventListener('touchend', () => { touchStartY = null; });
+
+    // Keyboard arrow / page keys for accessibility
+    window.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        onScroll(1);
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        onScroll(-1);
+      }
+    });
+  </script>
 </body>
 </html>
