@@ -10,6 +10,9 @@
             padding: 0;
             background-color: #0A0A3F;
             overflow: hidden; /* Blocks native scroll */
+            /* Prevents pull-to-refresh and overscroll on mobile */
+            overscroll-behavior-y: none; 
+            touch-action: none;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -17,8 +20,8 @@
         }
         #rive-container {
             /* Defined size prevents pixelation */
-            width: 1920px; 
-            height: 1080px;
+            width: 800px; 
+            height: 800px;
             max-width: 100vw;
             max-height: 100vh;
         }
@@ -62,16 +65,17 @@
 
                 updateBools(); // Initialize L as active
 
-                window.addEventListener('wheel', (e) => {
+                // Centralized function to handle state changes
+                const changeState = (direction) => {
                     if (isThrottled) return;
 
                     let changed = false;
                     
-                    if (e.deltaY > 0 && currentState < 2) {
-                        currentState++; // Scroll down: L -> M -> R
+                    if (direction === 1 && currentState < 2) {
+                        currentState++; // Scroll/Swipe down: L -> M -> R
                         changed = true;
-                    } else if (e.deltaY < 0 && currentState > 0) {
-                        currentState--; // Scroll up: R -> M -> L
+                    } else if (direction === -1 && currentState > 0) {
+                        currentState--; // Scroll/Swipe up: R -> M -> L
                         changed = true;
                     }
 
@@ -80,7 +84,35 @@
                         isThrottled = true;
                         setTimeout(() => { isThrottled = false; }, 600); // 600ms debounce
                     }
+                };
+
+                // Desktop wheel event
+                window.addEventListener('wheel', (e) => {
+                    changeState(e.deltaY > 0 ? 1 : -1);
                 }, { passive: false });
+
+                // Mobile touch events
+                let touchStartY = 0;
+
+                window.addEventListener('touchstart', (e) => {
+                    touchStartY = e.touches[0].clientY;
+                }, { passive: false });
+
+                window.addEventListener('touchmove', (e) => {
+                    e.preventDefault(); // Strictly block native scroll/bounce
+                }, { passive: false });
+
+                window.addEventListener('touchend', (e) => {
+                    let touchEndY = e.changedTouches[0].clientY;
+                    let deltaY = touchStartY - touchEndY;
+
+                    // 30px threshold to distinguish a swipe from a tap
+                    if (deltaY > 30) {
+                        changeState(1); // Swiped up -> triggers scroll down logic
+                    } else if (deltaY < -30) {
+                        changeState(-1); // Swiped down -> triggers scroll up logic
+                    }
+                });
             }
         });
 
