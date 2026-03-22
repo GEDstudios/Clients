@@ -18,10 +18,11 @@
             height: 100vh;
         }
         #rive-container {
-            width: 800px; 
-            height: 800px;
+            width: 1920px; 
+            height: 1080px;
             max-width: 100vw;
             max-height: 100vh;
+            aspect-ratio: 16 / 9; /* Maintains dimensions when scaled down */
         }
         canvas {
             width: 100%;
@@ -40,11 +41,10 @@
     <script>
         let currentState = 0; 
         let isThrottled = false;
+        let throttleTimer;
         let updateBools = () => {}; 
 
         const changeState = (direction) => {
-            if (isThrottled) return;
-
             let changed = false;
             
             if (direction === 1 && currentState < 2) {
@@ -58,35 +58,40 @@
             if (changed) {
                 updateBools();
                 isThrottled = true;
-                setTimeout(() => { isThrottled = false; }, 600); 
+                // Base lock time after a successful state change
+                throttleTimer = setTimeout(() => { isThrottled = false; }, 800); 
             }
         };
 
-        // Desktop Wheel
+        // Desktop Wheel with Kinetic Scroll Absorber
         document.addEventListener('wheel', (e) => {
-            changeState(e.deltaY > 0 ? 1 : -1);
+            if (Math.abs(e.deltaY) < 10) return; // Ignore micro-scrolls
+
+            if (!isThrottled) {
+                changeState(e.deltaY > 0 ? 1 : -1);
+            } else {
+                // If already locked, extend the lock to absorb kinetic scrolling
+                clearTimeout(throttleTimer);
+                throttleTimer = setTimeout(() => { isThrottled = false; }, 250);
+            }
         }, { passive: false });
 
         // Mobile Touch
         let touchStartY = 0;
-        let hasSwiped = false; // Locks the state change per physical swipe
 
         document.addEventListener('touchstart', (e) => {
             touchStartY = e.touches[0].clientY;
-            hasSwiped = false; // Reset lock on new touch
         }, { passive: false });
 
         document.addEventListener('touchmove', (e) => {
             e.preventDefault(); 
             
-            if (hasSwiped || isThrottled) return; // Exit if already swiped or animating
-
             let touchCurrentY = e.touches[0].clientY;
             let deltaY = touchStartY - touchCurrentY;
 
-            if (Math.abs(deltaY) > 40) {
+            if (Math.abs(deltaY) > 40 && !isThrottled) {
                 changeState(deltaY > 0 ? 1 : -1);
-                hasSwiped = true; // Lock further changes until finger is lifted
+                touchStartY = touchCurrentY; 
             }
         }, { passive: false });
 
