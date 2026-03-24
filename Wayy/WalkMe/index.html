@@ -114,6 +114,10 @@
             onLoad: () => {
                 riveInstance.resizeDrawingSurfaceToCanvas();
                 const inputs = riveInstance.stateMachineInputs('State Machine 1');
+                
+                const introTrigger = inputs.find(i => i.name === 'Intro');
+                if (introTrigger) introTrigger.fire();
+
                 const [inputL, inputM, inputR] = ['L', 'M', 'R'].map(n => inputs.find(i => i.name === n));
 
                 updateBools = () => {
