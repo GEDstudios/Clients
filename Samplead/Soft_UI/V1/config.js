@@ -1,7 +1,7 @@
 export const config = {
     type: "project",
     title: "Saemplead Soft UI",
-    description: "Animations displaying the user interface and interactions.",
+    description: "Lottie preview of the animations displaying the user interface and interactions.",
     navDepth: "../../../",
     
     sections: [
