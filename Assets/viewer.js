@@ -54,6 +54,7 @@ class LottieCard {
         this.data = data;
         
         this.container = wrapper.querySelector('.lottie-container');
+        this.timelineWrapper = wrapper.querySelector('.timeline-wrapper');
         this.track = wrapper.querySelector('.timeline-track');
         this.playhead = wrapper.querySelector('.playhead');
         this.frameDisplay = wrapper.querySelector('.frame-counter-text');
@@ -66,12 +67,25 @@ class LottieCard {
         this.ignoreLoopBarrier = false;
         this.rafId = null;
 
+        // Interaction States
+        this.isManuallyPaused = false;
+        this.isScrubbing = false;
+        this.wasPlayingBeforeScrub = false;
+
+        // Bind scrub methods for window listeners
+        this.handleScrubMove = (e) => this.doScrub(e);
+        this.handleScrubEnd = () => this.endScrub();
+
         this.parseSettings();
         this.initTheme();
         this.loadAnimation();
         
         this.container.addEventListener('mouseenter', () => this.onHover(true));
         this.container.addEventListener('mouseleave', () => this.onHover(false));
+        
+        // Setup Play/Pause & Scrubbing
+        this.container.addEventListener('click', () => this.togglePause());
+        this.timelineWrapper.addEventListener('mousedown', (e) => this.startScrub(e));
     }
 
     parseSettings() {
@@ -106,7 +120,6 @@ class LottieCard {
         if(toggleInput) {
             toggleInput.addEventListener('change', (e) => {
                 this.currentTheme = e.target.checked ? 'White' : 'Black';
-                this.wrapper.classList.toggle('light-mode', e.target.checked);
                 this.loadAnimation();
             });
         }
@@ -150,10 +163,10 @@ class LottieCard {
         });
 
         this.lottie.addEventListener('complete', () => {
-            if (this.type === 'hover_loop' && this.isHovering) {
+            if (this.type === 'hover_loop' && this.isHovering && !this.isManuallyPaused) {
                 this.lottie.setFrame(0);
                 this.lottie.play();
-            } else if (this.type === 'segment_loop' && this.isHovering) {
+            } else if (this.type === 'segment_loop' && this.isHovering && !this.isManuallyPaused) {
                 this.ignoreLoopBarrier = false;
                 this.lottie.setFrame(0);
                 this.lottie.play();
@@ -191,7 +204,7 @@ class LottieCard {
 
     startRenderLoop() {
         const loop = () => {
-            if (this.lottie && this.lottie.isPlaying) {
+            if (this.lottie && this.lottie.isPlaying && !this.isScrubbing) {
                 this.handleFrameLogic(this.lottie.currentFrame);
                 this.updateUI();
             }
@@ -230,31 +243,96 @@ class LottieCard {
         }
     }
 
+    /* --- INTERACTION METHODS --- */
+    
+    togglePause() {
+        if (!this.lottie) return;
+        this.isManuallyPaused = !this.isManuallyPaused;
+        
+        if (this.isManuallyPaused) {
+            this.lottie.pause();
+            this.wrapper.classList.remove('playing');
+            this.wrapper.classList.add('paused');
+        } else {
+            this.wrapper.classList.remove('paused');
+            if (this.type === 'full_loop' || this.isHovering) {
+                this.wrapper.classList.add('playing');
+                this.lottie.play();
+            }
+        }
+    }
+
+    startScrub(e) {
+        if (!this.lottie || !this.totalFrames) return;
+        this.isScrubbing = true;
+        this.wasPlayingBeforeScrub = this.lottie.isPlaying;
+        this.lottie.pause();
+        
+        window.addEventListener('mousemove', this.handleScrubMove);
+        window.addEventListener('mouseup', this.handleScrubEnd);
+        
+        this.updateScrubPosition(e);
+        this.wrapper.classList.add('playing');
+    }
+
+    doScrub(e) {
+        if (!this.isScrubbing || !this.lottie) return;
+        this.updateScrubPosition(e);
+    }
+
+    endScrub() {
+        if (!this.isScrubbing) return;
+        this.isScrubbing = false;
+        
+        window.removeEventListener('mousemove', this.handleScrubMove);
+        window.removeEventListener('mouseup', this.handleScrubEnd);
+        
+        if (this.wasPlayingBeforeScrub && !this.isManuallyPaused) {
+            this.lottie.play();
+        } else if (!this.isHovering && this.type !== 'full_loop') {
+             this.wrapper.classList.remove('playing');
+        }
+    }
+
+    updateScrubPosition(e) {
+        const rect = this.timelineWrapper.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        x = Math.max(0, Math.min(x, rect.width));
+        const pct = x / rect.width;
+        const targetFrame = pct * this.totalFrames;
+        
+        this.lottie.setFrame(targetFrame);
+        this.updateUI(); 
+    }
+
     onHover(state) {
         if (this.type === 'full_loop') return;
         this.isHovering = state;
+        if (this.isScrubbing) return;
 
         if (state) {
-            this.wrapper.classList.add('playing');
+            if (!this.isManuallyPaused) this.wrapper.classList.add('playing');
             if (this.type === 'segment_loop' && this.lottie.currentFrame > this.loopEnd) {
                 this.ignoreLoopBarrier = true;
             } else {
                 this.ignoreLoopBarrier = false;
             }
 
-            if (this.isFrozen || !this.lottie.isPlaying) {
+            if (this.isFrozen || (!this.lottie.isPlaying && !this.isManuallyPaused)) {
                 this.isFrozen = false;
                 this.wrapper.classList.remove('frozen');
                 if(this.lottie.currentFrame >= this.totalFrames - 1) {
                     this.lottie.setFrame(0);
                 }
-                this.lottie.play();
+                if (!this.isManuallyPaused) this.lottie.play();
             }
         } else {
             if (this.type === 'freeze') {
                 this.isFrozen = false;
                 this.wrapper.classList.remove('frozen');
-                this.lottie.play();
+                if (!this.isManuallyPaused) this.lottie.play();
+            } else if (!this.isManuallyPaused) {
+                this.wrapper.classList.remove('playing');
             }
         }
     }
@@ -316,7 +394,6 @@ export function init(projectConfig, globalConfig) {
             const grid = secDiv.querySelector('.lottie-grid');
             sec.files.forEach(fileData => {
                 const wrapper = document.createElement('div'); 
-                // Logic: Add .full-width class if property is true
                 wrapper.className = `animation-wrapper ${fileData.fullWidth ? 'full-width' : ''}`;
                 
                 const cleanName = fileData.fileName.replace(/\.(lottie|json)$/i, '').replace('{theme}', '').replace(/-/g, ' ');
