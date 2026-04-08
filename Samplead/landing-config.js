@@ -20,7 +20,7 @@ export const config = {
                 tag: "Soft UI",
                 badge: "",
                 desc: "Animations displaying the user interace and interactions.",
-                path: "Soft UI/V1/index.html" 
+                path: "Soft_UI/V1/index.html" 
             },
             archives: []
         }
