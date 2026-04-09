@@ -58,6 +58,7 @@ class LottieCard {
         this.track = wrapper.querySelector('.timeline-track');
         this.playhead = wrapper.querySelector('.playhead');
         this.frameDisplay = wrapper.querySelector('.frame-counter-text');
+        this.playPauseBtn = wrapper.querySelector('.play-pause-btn');
         
         this.lottie = null;
         this.totalFrames = 0;
@@ -85,6 +86,11 @@ class LottieCard {
         
         // Setup Play/Pause & Scrubbing
         this.container.addEventListener('click', () => this.togglePause());
+        this.playPauseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.togglePause();
+        });
+        
         this.timelineWrapper.addEventListener('mousedown', (e) => this.startScrub(e));
     }
 
@@ -148,7 +154,10 @@ class LottieCard {
             canvas: canvas,
             src: this.getFilePath(),
             loop: shouldUseNativeLoop, 
-            autoplay: this.type === 'full_loop'
+            autoplay: this.type === 'full_loop',
+            renderConfig: {
+                devicePixelRatio: window.devicePixelRatio // retina scaling fix
+            }
         });
 
         this.lottie.addEventListener('load', () => {
@@ -357,7 +366,9 @@ export function init(projectConfig, globalConfig) {
     const app = document.getElementById('app');
 
     if (projectConfig.type === 'landing') {
-        app.innerHTML = `<div class="container"><div class="header-area"><h1 class="page-title">${projectConfig.clientName}</h1><p class="page-desc">Motion Design Deliverables</p></div><div class="versions-grid" id="grid"></div></div>`;
+        const landingDesc = projectConfig.description || "Motion Design Deliverables";
+        
+        app.innerHTML = `<div class="container"><div class="header-area"><h1 class="page-title">${projectConfig.clientName}</h1><p class="page-desc">${landingDesc}</p></div><div class="versions-grid" id="grid"></div></div>`;
         const grid = document.getElementById('grid');
         
         projectConfig.projects.forEach(group => {
@@ -398,7 +409,28 @@ export function init(projectConfig, globalConfig) {
                 
                 const cleanName = fileData.fileName.replace(/\.(lottie|json)$/i, '').replace('{theme}', '').replace(/-/g, ' ');
                 const hasTheme = fileData.theme === true || fileData.fileName.includes('{theme}');
-                wrapper.innerHTML = `<div class="card-header"><div class="file-info"><div class="file-name">${cleanName}</div>${fileData.note ? `<div class="feedback-badge">${fileData.note}</div>` : ''}</div>${hasTheme ? `<label class="theme-switch"><input type="checkbox"><div class="switch-track"><div class="switch-knob"></div></div></label>` : ''}</div><div class="lottie-container"></div><div class="timeline-wrapper"><div class="timeline-track"></div><div class="playhead"></div></div><div class="frame-display">Frame: <span class="frame-counter-text">0</span></div>`;
+                
+                wrapper.innerHTML = `
+                    <div class="card-header">
+                        <div class="file-info">
+                            <div class="file-name">${cleanName}</div>
+                            ${fileData.note ? `<div class="feedback-badge">${fileData.note}</div>` : ''}
+                        </div>
+                        ${hasTheme ? `<label class="theme-switch"><input type="checkbox"><div class="switch-track"><div class="switch-knob"></div></div></label>` : ''}
+                    </div>
+                    <div class="lottie-container"></div>
+                    <div class="bottom-bar">
+                        <button class="play-pause-btn" aria-label="Play/Pause">
+                            <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        </button>
+                        <div class="timeline-wrapper">
+                            <div class="timeline-track"></div>
+                            <div class="playhead"></div>
+                        </div>
+                        <div class="frame-display">Frame: <span class="frame-counter-text">0</span></div>
+                    </div>
+                `;
                 grid.appendChild(wrapper);
                 new LottieCard(wrapper, fileData);
             });
