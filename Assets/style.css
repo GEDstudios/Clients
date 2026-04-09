@@ -183,7 +183,6 @@ body, html {
 .archive-item:hover .arch-title { color: #fff; }
 .archive-item:hover .arch-label { color: var(--text-muted); }
 
-
 /* --- PROJECT PAGE: ANIMATION CARD --- */
 .animation-wrapper {
     background: var(--bg-card);
@@ -193,7 +192,6 @@ body, html {
     position: relative; display: flex; flex-direction: column;
 }
 
-/* Full Width Card Modification */
 .animation-wrapper.full-width {
     grid-column: 1 / -1;
 }
@@ -239,10 +237,32 @@ body, html {
 }
 .lottie-container canvas { width: 100% !important; height: 100% !important; object-fit: contain; }
 
+/* --- NEW BOTTOM CONTROL BAR --- */
+.bottom-bar {
+    display: flex; align-items: center; gap: 16px;
+    margin-top: auto; width: 100%; height: 24px;
+}
+
+.play-pause-btn {
+    background: none; border: none; padding: 0;
+    color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.2s, transform 0.2s;
+}
+.play-pause-btn:hover { color: #fff; transform: scale(1.1); }
+.play-pause-btn svg { width: 16px; height: 16px; }
+
+/* Dynamic Play/Pause Icon State */
+.icon-pause { display: none; }
+.animation-wrapper.playing .icon-play { display: none; }
+.animation-wrapper.playing .icon-pause { display: block; }
+.animation-wrapper.paused .icon-play { display: block !important; }
+.animation-wrapper.paused .icon-pause { display: none !important; }
+
 .timeline-wrapper {
-    width: 100%; height: 16px; 
+    flex-grow: 1; height: 16px; 
     display: flex; align-items: center; position: relative;
-    margin-top: auto; cursor: pointer;
+    cursor: pointer;
 }
 .timeline-track {
     width: 100%; height: 4px;
@@ -269,11 +289,12 @@ body, html {
 .animation-wrapper.frozen .playhead { background: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan); }
 .animation-wrapper.paused .playhead { background: var(--text-muted); box-shadow: 0 0 10px rgba(136, 136, 144, 0.5); }
 
+/* Frame Display fits into Flex Row */
 .frame-display {
-    position: absolute; bottom: 25px; right: 0;
     font-family: var(--font-mono); font-size: 10px; color: #fff;
-    background: rgba(0,0,0,0.8); padding: 2px 6px; border-radius: 4px;
+    background: rgba(0,0,0,0.8); padding: 4px 8px; border-radius: 4px;
     pointer-events: none; opacity: 0; transition: opacity 0.2s;
+    white-space: nowrap; min-width: 65px; text-align: center;
 }
 .animation-wrapper:hover .frame-display { opacity: 1; }
 
