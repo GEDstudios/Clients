@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animation Preview</title>
+    <link rel="stylesheet" href="../../../Assets/style.css">
+</head>
+<body>
+    <div id="app"></div>
+    <script type="module">
+        import { config as projectConfig } from './config.js';
+        import { config as globalConfig } from '../../landing-config.js';
+        import { init } from '../../../Assets/viewer.js';
+        init(projectConfig, globalConfig);
+    </script>
+</body>
+</html>

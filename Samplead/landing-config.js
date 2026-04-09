@@ -19,11 +19,17 @@ export const config = {
             category: "Soft UI",
             main: {
                 tag: "Soft UI",
-                badge: "",
-                desc: "Animations displaying the user interace and interactions.",
-                path: "Soft_UI/V1/index.html"
+                badge: "V2",
+                desc: "Animations displaying the user interface and interactions.",
+                path: "Soft_UI/V2/index.html"
             },
-            archives: []
+            archives: [
+                {
+                    title: "v1.0",
+                    label: "Legacy",
+                    path: "Soft_UI/V1/index.html"
+                }
+            ]
         }
     ]
 };
