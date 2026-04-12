@@ -9,6 +9,7 @@ export const config = {
             title: "Soft UI",
             files: [
                 { fileName: "UI_1_Define_ICP.lottie", loop: true, fullWidth: true},
+                { fileName: "UI_2_Set_Triggers.lottie", loop: true, fullWidth: true},
             ]
         },
     ]
