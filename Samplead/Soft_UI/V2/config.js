@@ -11,6 +11,7 @@ export const config = {
                 { fileName: "UI_1_Define_ICP.lottie", loop: true, fullWidth: true},
                 { fileName: "UI_2_Set_Triggers.lottie", loop: true, fullWidth: true},
                 { fileName: "UI_3_Review_Prospects.lottie", loop: true, fullWidth: true},
+                { fileName: "UI_4_Campaigns.lottie", loop: true, fullWidth: true},
             ]
         },
     ]
