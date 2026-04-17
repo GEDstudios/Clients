@@ -13,7 +13,8 @@ export const config = {
                 { fileName: "UI_2_Set_Triggers.lottie", loop: true, fullWidth: true},
                 { fileName: "UI_3_Review_Prospects.lottie", loop: true, fullWidth: true},
                 { fileName: "UI_4_Campaigns.lottie", loop: true, fullWidth: true},
-                { fileName: "UI_5_Track_Performance.lottie", loop: true, fullWidth: true},
+                { fileName: "5_Analytics_Desktop Full width.lottie", loop: true, fullWidth: true},
+                { fileName: "5_Analytics_Centered for mobile.lottie", loop: true, fullWidth: true},
             ]
         },
     ]
