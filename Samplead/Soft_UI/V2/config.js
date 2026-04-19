@@ -9,7 +9,7 @@ export const config = {
             title: "Soft UI",
             files: [
                 { fileName: "Hero.lottie", loop: true, fullWidth: true},
-                { fileName: "Speared Ball.lottie", loop: true, fullWidth: true},
+                { fileName: "Speared Ball V2.lottie", loop: true, fullWidth: true},
                 { fileName: "UI_1_Define_ICP.lottie", loop: true, fullWidth: true},
                 { fileName: "UI_2_Set_Triggers.lottie", loop: true, fullWidth: true},
                 { fileName: "UI_3_Review_Prospects.lottie", loop: true, fullWidth: true},
