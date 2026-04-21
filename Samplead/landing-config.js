@@ -30,6 +30,22 @@ export const config = {
                     path: "Soft_UI/V1/index.html"
                 }
             ]
+        },
+        {
+            category: "Icons",
+            main: {
+                tag: "Icons",
+                badge: "V1",
+                desc: "Icons.",
+                path: "Icons/V1/index.html"
+            },
+            /*archives: [
+                {
+                    title: "v1.0",
+                    label: "Legacy",
+                    path: "Soft_UI/V1/index.html"
+                }
+            ]*/
         }
     ]
 };
