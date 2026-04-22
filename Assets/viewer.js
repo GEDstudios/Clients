@@ -68,12 +68,10 @@ class LottieCard {
         this.ignoreLoopBarrier = false;
         this.rafId = null;
 
-        // Interaction States
         this.isManuallyPaused = false;
         this.isScrubbing = false;
         this.wasPlayingBeforeScrub = false;
 
-        // Bind scrub methods for window listeners
         this.handleScrubMove = (e) => this.doScrub(e);
         this.handleScrubEnd = () => this.endScrub();
 
@@ -84,7 +82,6 @@ class LottieCard {
         this.container.addEventListener('mouseenter', () => this.onHover(true));
         this.container.addEventListener('mouseleave', () => this.onHover(false));
         
-        // Setup Play/Pause & Scrubbing
         this.container.addEventListener('click', () => this.togglePause());
         this.playPauseBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -154,10 +151,7 @@ class LottieCard {
             canvas: canvas,
             src: this.getFilePath(),
             loop: shouldUseNativeLoop, 
-            autoplay: this.type === 'full_loop',
-            renderConfig: {
-                devicePixelRatio: window.devicePixelRatio // retina scaling fix
-            }
+            autoplay: this.type === 'full_loop'
         });
 
         this.lottie.addEventListener('load', () => {
@@ -251,8 +245,6 @@ class LottieCard {
             }
         }
     }
-
-    /* --- INTERACTION METHODS --- */
     
     togglePause() {
         if (!this.lottie) return;
@@ -418,7 +410,7 @@ export function init(projectConfig, globalConfig) {
                         </div>
                         ${hasTheme ? `<label class="theme-switch"><input type="checkbox"><div class="switch-track"><div class="switch-knob"></div></div></label>` : ''}
                     </div>
-                    <div class="lottie-container"></div>
+                    <div class="lottie-container" ${fileData.customBg ? `style="background: ${fileData.customBg};"` : ''}></div>
                     <div class="bottom-bar">
                         <button class="play-pause-btn" aria-label="Play/Pause">
                             <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
