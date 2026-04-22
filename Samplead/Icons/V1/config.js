@@ -9,6 +9,7 @@ export const config = {
             title: "Icons",
             files: [
                 { fileName: "Calculator.lottie", loop: true},
+                { fileName: "Gears.lottie", loop: true},
             ]
         },
     ]
