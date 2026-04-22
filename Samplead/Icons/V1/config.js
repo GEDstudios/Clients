@@ -11,6 +11,7 @@ export const config = {
                 { fileName: "Calculator.lottie", loop: true},
                 { fileName: "Gears.lottie", loop: true},
                 { fileName: "Question.lottie", loop: true},
+                { fileName: "Notebook.lottie", loop: true},
             ]
         },
     ]
