@@ -13,6 +13,7 @@ export const config = {
                 { fileName: "Question.lottie", loop: true},
                 { fileName: "Notebook.lottie", loop: true},
                 { fileName: "Horse.lottie", loop: true},
+                { fileName: "Mail.lottie", loop: true, customBg:"#225849"},
             ]
         },
     ]
