@@ -47,5 +47,21 @@ export const config = {
                 }
             ]*/
         }
+                {
+            category: "Smaller",
+            main: {
+                tag: "Icons",
+                badge: "V1",
+                desc: "Icons.",
+                path: "Smaller/V1/index.html"
+            },
+            /*archives: [
+                {
+                    title: "v1.0",
+                    label: "Legacy",
+                    path: "Soft_UI/V1/index.html"
+                }
+            ]*/
+        }
     ]
 };
