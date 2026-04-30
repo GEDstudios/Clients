@@ -50,7 +50,7 @@ export const config = {
                 {
             category: "Smaller",
             main: {
-                tag: "Icons",
+                tag: "Smaller",
                 badge: "V1",
                 desc: "Icons.",
                 path: "Smaller/V1/index.html"
