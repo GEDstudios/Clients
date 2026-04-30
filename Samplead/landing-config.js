@@ -46,7 +46,7 @@ export const config = {
                     path: "Soft_UI/V1/index.html"
                 }
             ]*/
-        }
+        },
                 {
             category: "Smaller",
             main: {
