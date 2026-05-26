@@ -1,241 +1,200 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Premium Metallic Blob</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Premium Metallic Blob</title>
+<style>
+  * { box-sizing: border-box; }
 
-  <style>
-    html,
-    body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #050505;
-    }
+  html,
+  body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #050505;
+  }
 
-    body {
-      cursor: grab;
-      touch-action: none;
-    }
+  body {
+    cursor: grab;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
 
-    body:active {
-      cursor: grabbing;
-    }
+  body:active { cursor: grabbing; }
 
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100dvh;
-    }
-  </style>
+  canvas {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+  }
+</style>
 </head>
-
 <body>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 
-  <script type="module">
-    import * as THREE from 'three';
-    import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
+<script type="module">
+import * as THREE from 'three';
+import { SimplexNoise } from 'three/addons/math/SimplexNoise.js';
 
-    const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
+const isMobile = matchMedia('(max-width: 700px), (pointer: coarse)').matches;
+const maxPixelRatio = isMobile ? 1.25 : 1.75;
+const geometryDetail = isMobile ? 20 : 32;
+const normalUpdateInterval = isMobile ? 3 : 2;
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: !isMobile,
-      alpha: false,
-      powerPreference: 'high-performance',
-      stencil: false
-    });
+const renderer = new THREE.WebGLRenderer({
+  antialias: !isMobile,
+  powerPreference: 'high-performance',
+  stencil: false,
+  depth: true
+});
 
-    document.body.appendChild(renderer.domElement);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
 
-    const scene = new THREE.Scene();
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+camera.position.z = 4.8;
 
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-    camera.position.set(0, 0, 4.5);
+new THREE.TextureLoader().load('hdri.jpg', (texture) => {
+  texture.mapping = THREE.EquirectangularReflectionMapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  scene.environment = texture;
+});
 
-    const textureLoader = new THREE.TextureLoader();
+const geometry = new THREE.IcosahedronGeometry(1, geometryDetail);
+const position = geometry.attributes.position;
+const vertices = position.array;
+const baseVertices = vertices.slice();
 
-    textureLoader.load('hdri.jpg', (texture) => {
-      texture.mapping = THREE.EquirectangularReflectionMapping;
-      texture.colorSpace = THREE.SRGBColorSpace;
-      scene.environment = texture;
-    });
+position.setUsage(THREE.DynamicDrawUsage);
 
-    const detail = isMobile ? 18 : 28;
+const blob = new THREE.Mesh(
+  geometry,
+  new THREE.MeshPhysicalMaterial({
+    color: 0xdddddd,
+    metalness: 1,
+    roughness: 0.125,
+    clearcoat: 0.5,
+    clearcoatRoughness: 1
+  })
+);
 
-    const geometry = new THREE.IcosahedronGeometry(1, detail);
-    const positionAttribute = geometry.attributes.position;
+scene.add(blob);
 
-    positionAttribute.setUsage(THREE.DynamicDrawUsage);
+const clock = new THREE.Clock();
+const noise = new SimplexNoise();
+const targetRotation = new THREE.Vector2();
+const pointer = { active: false, x: 0, y: 0 };
 
-    const vertexCount = positionAttribute.count;
-    const positions = positionAttribute.array;
-    const basePositions = new Float32Array(positions);
+let frame = 0;
+let rafId = 0;
+let resizeId = 0;
 
-    const material = new THREE.MeshPhysicalMaterial({
-      color: 0xdddddd,
-      metalness: 1,
-      roughness: 0.025,
-      clearcoat: 0.5,
-      clearcoatRoughness: 1
-    });
+function resize() {
+  const width = window.innerWidth;
+  const height = window.visualViewport?.height || window.innerHeight;
 
-    const blob = new THREE.Mesh(geometry, material);
-    scene.add(blob);
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, maxPixelRatio));
+  renderer.setSize(width, height, false);
 
-    const simplex = new SimplexNoise();
-    const clock = new THREE.Clock();
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
 
-    const targetRotation = new THREE.Vector2(0, 0);
+  const narrowScreen = width < 520;
+  blob.scale.setScalar(narrowScreen ? 0.82 : 1);
+  camera.position.z = narrowScreen ? 5.3 : 4.8;
+}
 
-    let isDragging = false;
-    let previousX = 0;
-    let previousY = 0;
-    let frame = 0;
-    let animationId = null;
+function updateBlob(time) {
+  for (let i = 0; i < position.count; i++) {
+    const j = i * 3;
+    const x = baseVertices[j];
+    const y = baseVertices[j + 1];
+    const z = baseVertices[j + 2];
+    const displacement = 1 + noise.noise3d(x + time, y + time, z) * 0.1;
 
-    function getViewportSize() {
-      const viewport = window.visualViewport;
+    vertices[j] = x * displacement;
+    vertices[j + 1] = y * displacement;
+    vertices[j + 2] = z * displacement;
+  }
 
-      return {
-        width: viewport?.width || window.innerWidth,
-        height: viewport?.height || window.innerHeight
-      };
-    }
+  position.needsUpdate = true;
 
-    function updateSize() {
-      const { width, height } = getViewportSize();
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.25 : 1.75);
+  if (frame % normalUpdateInterval === 0) {
+    geometry.computeVertexNormals();
+  }
+}
 
-      renderer.setPixelRatio(pixelRatio);
-      renderer.setSize(width, height, false);
+function animate() {
+  rafId = requestAnimationFrame(animate);
 
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
+  blob.rotation.x = THREE.MathUtils.lerp(blob.rotation.x, targetRotation.x, 0.05);
+  blob.rotation.y = THREE.MathUtils.lerp(blob.rotation.y, targetRotation.y, 0.05);
 
-      blob.scale.setScalar(width < 600 ? 0.78 : 1);
-    }
+  updateBlob(clock.getElapsedTime() * 0.4);
+  renderer.render(scene, camera);
+  frame++;
+}
 
-    function updateBlob() {
-      const t = clock.getElapsedTime() * 0.4;
+function start() {
+  if (!rafId) animate();
+}
 
-      for (let i = 0; i < vertexCount; i++) {
-        const i3 = i * 3;
+function stop() {
+  cancelAnimationFrame(rafId);
+  rafId = 0;
+}
 
-        const x = basePositions[i3];
-        const y = basePositions[i3 + 1];
-        const z = basePositions[i3 + 2];
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  pointer.active = true;
+  pointer.x = event.clientX;
+  pointer.y = event.clientY;
+  renderer.domElement.setPointerCapture(event.pointerId);
+});
 
-        const noise = simplex.noise3d(x + t, y + t, z);
-        const displacement = 1 + noise * 0.1;
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!pointer.active) return;
 
-        positions[i3] = x * displacement;
-        positions[i3 + 1] = y * displacement;
-        positions[i3 + 2] = z * displacement;
-      }
+  targetRotation.x += (event.clientY - pointer.y) * 0.005;
+  targetRotation.y += (event.clientX - pointer.x) * 0.005;
 
-      positionAttribute.needsUpdate = true;
+  pointer.x = event.clientX;
+  pointer.y = event.clientY;
+});
 
-      if (frame % (isMobile ? 3 : 2) === 0) {
-        geometry.computeVertexNormals();
-      }
+renderer.domElement.addEventListener('pointerup', (event) => {
+  pointer.active = false;
+  renderer.domElement.releasePointerCapture(event.pointerId);
+});
 
-      frame++;
-    }
+renderer.domElement.addEventListener('pointercancel', () => {
+  pointer.active = false;
+});
 
-    function animate() {
-      animationId = requestAnimationFrame(animate);
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(resizeId);
+  resizeId = requestAnimationFrame(resize);
+});
 
-      blob.rotation.x = THREE.MathUtils.lerp(blob.rotation.x, targetRotation.x, 0.06);
-      blob.rotation.y = THREE.MathUtils.lerp(blob.rotation.y, targetRotation.y, 0.06);
+window.visualViewport?.addEventListener('resize', resize);
 
-      updateBlob();
-      renderer.render(scene, camera);
-    }
+document.addEventListener('visibilitychange', () => {
+  document.hidden ? stop() : start();
+});
 
-    function startAnimation() {
-      if (animationId === null) {
-        clock.getDelta();
-        animate();
-      }
-    }
-
-    function stopAnimation() {
-      if (animationId !== null) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-      }
-    }
-
-    renderer.domElement.addEventListener('pointerdown', (event) => {
-      isDragging = true;
-      previousX = event.clientX;
-      previousY = event.clientY;
-      renderer.domElement.setPointerCapture(event.pointerId);
-    });
-
-    renderer.domElement.addEventListener('pointermove', (event) => {
-      if (!isDragging) return;
-
-      const deltaX = event.clientX - previousX;
-      const deltaY = event.clientY - previousY;
-
-      targetRotation.x += deltaY * 0.005;
-
-      // Inverted so dragging right visually turns the blob right.
-      targetRotation.y -= deltaX * 0.005;
-
-      previousX = event.clientX;
-      previousY = event.clientY;
-    });
-
-    renderer.domElement.addEventListener('pointerup', (event) => {
-      isDragging = false;
-
-      if (renderer.domElement.hasPointerCapture(event.pointerId)) {
-        renderer.domElement.releasePointerCapture(event.pointerId);
-      }
-    });
-
-    renderer.domElement.addEventListener('pointercancel', () => {
-      isDragging = false;
-    });
-
-    let resizeQueued = false;
-
-    function queueResize() {
-      if (resizeQueued) return;
-
-      resizeQueued = true;
-
-      requestAnimationFrame(() => {
-        resizeQueued = false;
-        updateSize();
-      });
-    }
-
-    window.addEventListener('resize', queueResize);
-    window.visualViewport?.addEventListener('resize', queueResize);
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        stopAnimation();
-      } else {
-        startAnimation();
-      }
-    });
-
-    updateSize();
-    startAnimation();
-  </script>
+resize();
+start();
+</script>
 </body>
 </html>
