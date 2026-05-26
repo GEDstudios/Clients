@@ -165,26 +165,55 @@ let isDragging = false;
 let previousX = 0;
 let previousY = 0;
 
-const targetRotation = new THREE.Vector2(0, 0);
+// Quaternion-based screen-space controls avoid the "horizontal inversion"
+// that can happen when accumulating Euler X/Y rotations.
+const targetQuaternion = blob.quaternion.clone();
+const dragVelocity = new THREE.Vector2(0, 0);
+
+const screenRight = new THREE.Vector3(1, 0, 0);
+const screenUp = new THREE.Vector3(0, 1, 0);
+
+function getDragRotationScale() {
+  const { width, height } = getViewportSize();
+  const shortestSide = Math.max(1, Math.min(width, height));
+
+  // Radians per CSS pixel. Normalizing by screen size makes desktop and mobile
+  // feel closer to each other.
+  return Math.PI * (isMobile ? 1.15 : 0.95) / shortestSide;
+}
+
+function applyScreenSpaceDrag(deltaX, deltaY) {
+  const scale = getDragRotationScale();
+
+  const yaw = deltaX * scale;
+  const pitch = deltaY * scale;
+
+  const yawQuaternion = new THREE.Quaternion().setFromAxisAngle(screenUp, yaw);
+  const pitchQuaternion = new THREE.Quaternion().setFromAxisAngle(screenRight, pitch);
+
+  // Premultiplication applies rotations in camera/screen space rather than the
+  // blob's changing local axes, so dragging right keeps feeling like dragging right.
+  targetQuaternion.premultiply(yawQuaternion).premultiply(pitchQuaternion).normalize();
+}
+
+function endDrag(e) {
+  isDragging = false;
+
+  if (e && renderer.domElement.hasPointerCapture(e.pointerId)) {
+    renderer.domElement.releasePointerCapture(e.pointerId);
+  }
+}
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
   isDragging = true;
   previousX = e.clientX;
   previousY = e.clientY;
+  dragVelocity.set(0, 0);
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 
-renderer.domElement.addEventListener('pointerup', (e) => {
-  isDragging = false;
-
-  if (renderer.domElement.hasPointerCapture(e.pointerId)) {
-    renderer.domElement.releasePointerCapture(e.pointerId);
-  }
-});
-
-renderer.domElement.addEventListener('pointercancel', () => {
-  isDragging = false;
-});
+renderer.domElement.addEventListener('pointerup', endDrag);
+renderer.domElement.addEventListener('pointercancel', endDrag);
 
 renderer.domElement.addEventListener('pointermove', (e) => {
   if (!isDragging) return;
@@ -192,8 +221,10 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   const deltaX = e.clientX - previousX;
   const deltaY = e.clientY - previousY;
 
-  targetRotation.x += deltaY * 0.005;
-  targetRotation.y += deltaX * 0.005;
+  applyScreenSpaceDrag(deltaX, deltaY);
+
+  // Small residual velocity gives the control a more premium, less sticky feel.
+  dragVelocity.set(deltaX, deltaY).multiplyScalar(0.18);
 
   previousX = e.clientX;
   previousY = e.clientY;
@@ -207,8 +238,12 @@ function animate() {
 
   requestAnimationFrame(animate);
 
-  blob.rotation.x = THREE.MathUtils.lerp(blob.rotation.x, targetRotation.x, 0.05);
-  blob.rotation.y = THREE.MathUtils.lerp(blob.rotation.y, targetRotation.y, 0.05);
+  if (!isDragging && dragVelocity.lengthSq() > 0.0001) {
+    applyScreenSpaceDrag(dragVelocity.x, dragVelocity.y);
+    dragVelocity.multiplyScalar(0.92);
+  }
+
+  blob.quaternion.slerp(targetQuaternion, isDragging ? 0.22 : 0.11);
 
   const t = clock.getElapsedTime() * 0.4;
 
