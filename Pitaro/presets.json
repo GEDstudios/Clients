@@ -1,0 +1,110 @@
+[
+  {
+    "id": "story",
+    "name": "Story / Reel",
+    "note": "Instagram and TikTok stories",
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "duration": 6,
+    "background": "media/story-bg.mp4",
+    "backgroundAlt": "",
+    "foreground": "media/story-fg.webm",
+    "foregroundAlt": "",
+    "poster": "media/story-card.jpg",
+    "audio": "background",
+    "text": {
+      "x": 0.5,
+      "y": 0.4,
+      "width": 0.78,
+      "size": 0.085,
+      "align": "center",
+      "lineHeight": 1.12,
+      "color": "#F3F3F3",
+      "font": "Ezer Standard",
+      "weight": 500,
+      "placeholder": "Your message here"
+    },
+    "allow": {
+      "text": true,
+      "upload": true,
+      "color": true,
+      "font": true,
+      "size": true,
+      "transform": true,
+      "sound": true
+    }
+  },
+  {
+    "id": "square",
+    "name": "Square post",
+    "note": "Feed posts and paid social",
+    "width": 1080,
+    "height": 1080,
+    "fps": 30,
+    "duration": 5,
+    "background": "media/square-bg.mp4",
+    "backgroundAlt": "",
+    "foreground": "media/square-fg.webm",
+    "foregroundAlt": "",
+    "poster": "media/square-card.jpg",
+    "audio": "none",
+    "text": {
+      "x": 0.5,
+      "y": 0.4,
+      "width": 0.8,
+      "size": 0.085,
+      "align": "center",
+      "lineHeight": 1.12,
+      "color": "#F3F3F3",
+      "font": "Ezer Standard",
+      "weight": 500,
+      "placeholder": "Your message here"
+    },
+    "allow": {
+      "text": true,
+      "upload": true,
+      "color": true,
+      "font": true,
+      "size": true,
+      "transform": true,
+      "sound": true
+    }
+  },
+  {
+    "id": "landscape",
+    "name": "Landscape",
+    "note": "YouTube, web and presentations",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "duration": 5,
+    "background": "media/landscape-bg.mp4",
+    "backgroundAlt": "",
+    "foreground": "media/landscape-fg.webm",
+    "foregroundAlt": "",
+    "poster": "media/landscape-card.jpg",
+    "audio": "none",
+    "text": {
+      "x": 0.5,
+      "y": 0.4,
+      "width": 0.7,
+      "size": 0.062,
+      "align": "center",
+      "lineHeight": 1.12,
+      "color": "#F3F3F3",
+      "font": "Ezer Standard",
+      "weight": 500,
+      "placeholder": "Your message here"
+    },
+    "allow": {
+      "text": true,
+      "upload": true,
+      "color": true,
+      "font": true,
+      "size": true,
+      "transform": true,
+      "sound": true
+    }
+  }
+]
