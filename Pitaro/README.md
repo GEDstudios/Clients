@@ -10,7 +10,7 @@ A small static client-side video production tool designed for GitHub Pages.
   - Rich text with per-selection font choice, or
   - A user-uploaded image/video.
 - The middle layer starts centered and can be dragged and scaled.
-- Text grows **linearly by 2% per second** from its user-set base size.
+- Text shrinks **linearly by 2% per second** from its user-set base size.
 - Export is **1080×1920, 30 fps, H.264 MP4, 20 Mbps video**.
 - Export duration is taken from `bg.webm`.
 - Only audio from `bg.webm` is included.

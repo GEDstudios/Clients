@@ -18,8 +18,8 @@ import { registerAacEncoder } from 'https://cdn.jsdelivr.net/npm/@mediabunny/aac
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const FPS = 30;
-const BASE_TEXT_SIZE = 92;
-const TEXT_GROWTH_PER_SECOND = 0.02;
+const DEFAULT_TEXT_SIZE = 92;
+const TEXT_SCALE_DOWN_PER_SECOND = 0.02;
 const VIDEO_BITRATE = 20_000_000;
 const AUDIO_BITRATE = 256_000;
 
@@ -32,11 +32,19 @@ const els = {
   mediaControls: $('mediaControls'),
   richTextEditor: $('richTextEditor'),
   fontSelect: $('fontSelect'),
+  fontSizeInput: $('fontSizeInput'),
+  trackingInput: $('trackingInput'),
+  lineHeightInput: $('lineHeightInput'),
+  textColorInput: $('textColorInput'),
+  textColorValue: $('textColorValue'),
   mediaInput: $('mediaInput'),
   dropZone: $('dropZone'),
   dropLabel: $('dropLabel'),
   removeMediaBtn: $('removeMediaBtn'),
   centerBtn: $('centerBtn'),
+  xInput: $('xInput'),
+  yInput: $('yInput'),
+  scaleInput: $('scaleInput'),
   scaleSlider: $('scaleSlider'),
   scaleOutput: $('scaleOutput'),
   exportBtn: $('exportBtn'),
@@ -64,6 +72,10 @@ const state = {
   x: 0.5,
   y: 0.5,
   scale: 1,
+  fontSize: DEFAULT_TEXT_SIZE,
+  tracking: 0,
+  lineHeight: 1.08,
+  textColor: '#111111',
   duration: 0,
   templateReady: false,
   currentTime: 0,
@@ -144,16 +156,32 @@ function applyFontToSelection(fontFamily) {
   syncPreviewText();
 }
 
+function textTimelineScale(time) {
+  return Math.max(0.05, 1 - TEXT_SCALE_DOWN_PER_SECOND * Math.max(0, time || 0));
+}
+
+function syncTransformInputs() {
+  if (document.activeElement !== els.xInput) els.xInput.value = (state.x * 100).toFixed(1).replace(/\.0$/, '');
+  if (document.activeElement !== els.yInput) els.yInput.value = (state.y * 100).toFixed(1).replace(/\.0$/, '');
+  if (document.activeElement !== els.scaleInput) els.scaleInput.value = Math.round(state.scale * 100);
+  els.scaleSlider.value = String(Math.round(state.scale * 100));
+  els.scaleOutput.textContent = `${Math.round(state.scale * 100)}%`;
+}
+
 function renderPreviewTransform() {
   const time = state.currentTime || 0;
-  const growth = state.mode === 'text' ? 1 + TEXT_GROWTH_PER_SECOND * time : 1;
-  const visualScale = state.scale * growth;
+  const timelineScale = state.mode === 'text' ? textTimelineScale(time) : 1;
+  const visualScale = state.scale * timelineScale;
   els.middleLayer.style.left = `${state.x * 100}%`;
   els.middleLayer.style.top = `${state.y * 100}%`;
   els.middleLayer.style.transform = `translate(-50%, -50%) scale(${visualScale})`;
+  syncTransformInputs();
 
   const previewScale = els.stage.clientWidth / WIDTH;
-  els.previewText.style.fontSize = `${BASE_TEXT_SIZE * previewScale}px`;
+  els.previewText.style.fontSize = `${state.fontSize * previewScale}px`;
+  els.previewText.style.lineHeight = String(state.lineHeight);
+  els.previewText.style.letterSpacing = `${state.tracking * previewScale}px`;
+  els.previewText.style.color = state.textColor;
   els.previewText.style.maxWidth = `${WIDTH * 0.88 * previewScale}px`;
 
   if (state.mediaKind === 'image' && els.previewImage.naturalWidth) {
@@ -397,27 +425,30 @@ function drawRichText(ctx, chars, x, y, scale) {
     if (item.char === '\n') lines.push([]);
     else lines.at(-1).push(item);
   }
-  const lineHeight = BASE_TEXT_SIZE * 1.08;
+  const fontSize = state.fontSize;
+  const tracking = state.tracking;
+  const lineHeight = fontSize * state.lineHeight;
   const totalHeight = Math.max(lineHeight, lines.length * lineHeight);
 
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#111111';
+  ctx.fillStyle = state.textColor;
 
   lines.forEach((line, lineIndex) => {
     const widths = line.map(({ char, font }) => {
-      ctx.font = `${font === 'GesturaBlackItalic' ? 'italic ' : ''}${BASE_TEXT_SIZE}px "${font}"`;
+      ctx.font = `${font === 'GesturaBlackItalic' ? 'italic ' : ''}${fontSize}px "${font}"`;
       return ctx.measureText(char).width;
     });
-    const lineWidth = widths.reduce((sum, w) => sum + w, 0);
+    const spacingWidth = Math.max(0, line.length - 1) * tracking;
+    const lineWidth = widths.reduce((sum, w) => sum + w, 0) + spacingWidth;
     let cursorX = -lineWidth / 2;
     const lineY = -totalHeight / 2 + lineHeight / 2 + lineIndex * lineHeight;
     line.forEach(({ char, font }, index) => {
-      ctx.font = `${font === 'GesturaBlackItalic' ? 'italic ' : ''}${BASE_TEXT_SIZE}px "${font}"`;
+      ctx.font = `${font === 'GesturaBlackItalic' ? 'italic ' : ''}${fontSize}px "${font}"`;
       ctx.fillText(char, cursorX, lineY);
-      cursorX += widths[index];
+      cursorX += widths[index] + (index < line.length - 1 ? tracking : 0);
     });
   });
   ctx.restore();
@@ -592,8 +623,8 @@ async function exportVideo() {
 
       const t = timestamps[i];
       if (state.mode === 'text') {
-        const growth = 1 + TEXT_GROWTH_PER_SECOND * t;
-        drawRichText(ctx, textChars, state.x * WIDTH, state.y * HEIGHT, state.scale * growth);
+        const timelineScale = textTimelineScale(t);
+        drawRichText(ctx, textChars, state.x * WIDTH, state.y * HEIGHT, state.scale * timelineScale);
       } else if (middleImageBitmap) {
         drawMiddleMedia(ctx, middleImageBitmap, middleImageBitmap.width, middleImageBitmap.height);
       } else if (middleFrame) {
@@ -687,6 +718,24 @@ function bindEvents() {
   });
   els.fontSelect.addEventListener('mousedown', saveEditorSelection);
   els.fontSelect.addEventListener('change', () => applyFontToSelection(els.fontSelect.value));
+  els.fontSizeInput.addEventListener('input', () => {
+    state.fontSize = Math.max(20, Math.min(260, Number(els.fontSizeInput.value) || DEFAULT_TEXT_SIZE));
+    renderPreviewTransform();
+  });
+  els.trackingInput.addEventListener('input', () => {
+    state.tracking = Math.max(-20, Math.min(80, Number(els.trackingInput.value) || 0));
+    renderPreviewTransform();
+  });
+  els.lineHeightInput.addEventListener('input', () => {
+    const value = Math.max(70, Math.min(200, Number(els.lineHeightInput.value) || 108));
+    state.lineHeight = value / 100;
+    renderPreviewTransform();
+  });
+  els.textColorInput.addEventListener('input', () => {
+    state.textColor = els.textColorInput.value;
+    els.textColorValue.textContent = state.textColor.toUpperCase();
+    renderPreviewTransform();
+  });
 
   els.mediaInput.addEventListener('change', () => {
     const file = els.mediaInput.files?.[0];
@@ -708,7 +757,21 @@ function bindEvents() {
 
   els.scaleSlider.addEventListener('input', () => {
     state.scale = Number(els.scaleSlider.value) / 100;
-    els.scaleOutput.textContent = `${els.scaleSlider.value}%`;
+    renderPreviewTransform();
+  });
+  els.scaleInput.addEventListener('input', () => {
+    const value = Math.max(20, Math.min(220, Number(els.scaleInput.value) || 100));
+    state.scale = value / 100;
+    renderPreviewTransform();
+  });
+  els.xInput.addEventListener('input', () => {
+    const value = Math.max(0, Math.min(100, Number(els.xInput.value) || 0));
+    state.x = value / 100;
+    renderPreviewTransform();
+  });
+  els.yInput.addEventListener('input', () => {
+    const value = Math.max(0, Math.min(100, Number(els.yInput.value) || 0));
+    state.y = value / 100;
     renderPreviewTransform();
   });
   els.centerBtn.addEventListener('click', centerLayer);
