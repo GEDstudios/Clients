@@ -538,14 +538,21 @@ async function exportVideo() {
 
     const duration = await bgInput.computeDuration();
     const fps = 30;
-    const frameCount = Math.ceil(duration * fps);
-    const times = Array.from({ length: frameCount }, (_, i) => i / fps);
+    const frameDuration = 1 / fps;
+    // Use a fixed CFR frame grid for the MP4. Decode the source at the midpoint of
+    // each output frame interval rather than its leading edge. WebM timestamps are
+    // often quantized to milliseconds (33/34 ms at nominal 30 fps); leading-edge
+    // sampling can therefore land just before the next source frame and repeat the
+    // previous one. Midpoint sampling selects the intended frame robustly.
+    const frameCount = Math.max(1, Math.round(duration * fps));
+    const times = Array.from({ length: frameCount }, (_, i) => i * frameDuration);
+    const decodeTimes = times.map((t) => Math.min(duration - 1e-6, t + frameDuration * 0.5));
     const bgSink = new CanvasSink(bgTrack, { width: 1080, height: 1920, fit: 'fill' });
     // The foreground template contains transparency. CanvasSink defaults alpha to false,
     // which would flatten transparent pixels to black and cover the whole composite.
     const fgSink = new CanvasSink(fgTrack, { width: 1080, height: 1920, fit: 'fill', alpha: true });
-    const bgIterator = bgSink.canvasesAtTimestamps(times)[Symbol.asyncIterator]();
-    const fgIterator = fgSink.canvasesAtTimestamps(times)[Symbol.asyncIterator]();
+    const bgIterator = bgSink.canvasesAtTimestamps(decodeTimes)[Symbol.asyncIterator]();
+    const fgIterator = fgSink.canvasesAtTimestamps(decodeTimes)[Symbol.asyncIterator]();
 
     let mediaInputExport = null, mediaIterator = null, mediaBitmap = null;
     if (state.mode === 'media' && state.mediaFile) {
@@ -561,7 +568,7 @@ async function exportVideo() {
         if (mw && mh) state.mediaRatio = mw / mh;
         const mediaDuration = await mediaTrack.computeDuration();
         const mediaSink = new CanvasSink(mediaTrack);
-        const mediaTimes = times.map((t) => t % Math.max(1 / fps, mediaDuration));
+        const mediaTimes = decodeTimes.map((t) => t % Math.max(frameDuration, mediaDuration));
         // Looping timestamps are not monotonic; getCanvas is safer for the occasional uploaded clip.
         mediaIterator = { next: async (i) => ({ value: await mediaSink.getCanvas(mediaTimes[i]), done: false }) };
       }
@@ -578,7 +585,8 @@ async function exportVideo() {
       quality: new Quality({ bitrate: 20_000_000 }),
       keyFrameInterval: 2,
     });
-    output.addVideoTrack(videoSource);
+    // Declare the intended CFR explicitly so timestamps/durations are snapped to 30 fps.
+    output.addVideoTrack(videoSource, { frameRate: fps });
 
     let audioSource = null, audioSink = null;
     const audioTrack = await bgInput.getPrimaryAudioTrack();
@@ -616,7 +624,7 @@ async function exportVideo() {
       }
 
       ctx.drawImage(fgFrame, 0, 0, 1080, 1920);
-      await videoSource.add(t, 1 / fps, i % (fps * 2) === 0 ? { keyFrame: true } : undefined);
+      await videoSource.add(t, frameDuration, i % (fps * 2) === 0 ? { keyFrame: true } : undefined);
 
       const pct = Math.round(((i + 1) / frameCount) * 96);
       $('progressFill').style.width = `${pct}%`;
