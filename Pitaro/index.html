@@ -5,16 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#f5f5f3" />
   <title>Toolbox Composer</title>
+  <link rel="icon" href="./assets/pitaro-symbol.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true">T</div>
+        <div class="brand-mark">
+          <img src="./assets/pitaro-symbol.svg" alt="Pitaro" onerror="this.style.display='none'" />
+          <span class="brand-fallback" aria-hidden="true">P</span>
+        </div>
         <div class="brand-copy">
           <strong>Toolbox Composer</strong>
-          <span>Social video editor</span>
+          <span class="brand-credit"><a href="https://x10guy.studio/" target="_blank" rel="noopener noreferrer">Guy Ekstein</a><span aria-hidden="true">×</span><a href="https://www.tomaya.studio/" target="_blank" rel="noopener noreferrer">Tomaya</a><span class="credit-for">for Pitaro</span></span>
         </div>
       </div>
 
@@ -115,11 +119,21 @@
           <button id="removeMedia" class="danger-quiet is-hidden" type="button">Remove media</button>
         </section>
 
+        <section class="inspector-section template-section">
+          <div class="section-title">Options</div>
+          <label class="control-toggle-row" for="closingLogoToggle">
+            <span>Closing logo</span>
+            <input id="closingLogoToggle" type="checkbox" checked />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
+        </section>
+
         <section class="inspector-section transform-section">
           <div class="section-heading">
             <div class="section-title">Position & size</div>
-            <button id="centerObject" class="icon-button" type="button" title="Center object" aria-label="Center object">
+            <button id="centerObject" class="icon-button center-button" type="button" title="Center object" aria-label="Center object">
               <svg viewBox="0 0 18 18"><path d="M9 2.5v13M2.5 9h13M5 5H3.5v1.5M13 5h1.5v1.5M5 13H3.5v-1.5M13 13h1.5v-1.5"/></svg>
+              <span class="center-label">Center</span>
             </button>
           </div>
 
@@ -130,12 +144,6 @@
             <label class="numeric-field"><span>S</span><input id="scaleField" type="number" min="10" max="300" step="1" value="100" /><small>%</small></label>
           </div>
 
-        </section>
-
-        <section class="inspector-section output-summary">
-          <div class="output-row"><span>Output</span><strong>1080 × 1920</strong></div>
-          <div class="output-row"><span>Frame rate</span><strong>30 fps</strong></div>
-          <div class="output-row"><span>Audio</span><strong>Background only</strong></div>
         </section>
       </aside>
 
@@ -149,14 +157,7 @@
             <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M3 5h12M6 9h9M9 13h6"/><circle cx="5" cy="9" r="1"/><circle cx="8" cy="13" r="1"/></svg>
             Style
           </button>
-          <div class="canvas-toolbar-right">
-            <label class="closing-logo-toggle" for="closingLogoToggle">
-              <input id="closingLogoToggle" type="checkbox" />
-              <span class="checkmark" aria-hidden="true"></span>
-              <span>Closing logo</span>
-            </label>
-            <div class="zoom-label">Fit</div>
-          </div>
+
         </div>
 
         <div class="stage-wrap">

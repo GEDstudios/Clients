@@ -26,7 +26,7 @@ const state = {
   mediaUrl: null,
   mediaRatio: 1,
   templateReady: false,
-  closingLogo: false,
+  closingLogo: true,
   closingLogoAvailable: false,
   raf: null,
 };
@@ -53,6 +53,7 @@ const mobileCenterAction = $('mobileCenterAction');
 const mobileQuery = window.matchMedia('(max-width: 760px)');
 let savedTextRange = null;
 let pendingExport = null;
+let previewMasterVideo = bgVideo;
 
 function openMobileInspector() {
   if (!mobileQuery.matches) return;
@@ -98,7 +99,7 @@ closingLogoToggle?.addEventListener('change', () => {
   state.closingLogo = closingLogoToggle.checked;
   fg2Video?.classList.toggle('is-hidden', !state.closingLogo);
   if (state.closingLogo) {
-    setVideoTime(fg2Video, bgVideo.currentTime || 0);
+    setVideoTime(fg2Video, Number($('timeline').value) || 0);
     if (!bgVideo.paused) fg2Video.play().catch(() => {});
   } else {
     fg2Video?.pause();
@@ -513,15 +514,14 @@ async function initTemplate() {
   const fg2Metadata = waitForMetadata(fg2Video).then(() => true, () => false);
   try {
     await Promise.all([waitForMetadata(bgVideo), waitForMetadata(fgVideo)]);
-    state.duration = bgVideo.duration;
-    state.templateReady = Number.isFinite(state.duration) && state.duration > 0;
-    if (!state.templateReady) throw new Error('Invalid duration');
 
     // fg2.webm is optional. Its absence must never block the main template.
     if (await fg2Metadata) {
       state.closingLogoAvailable = true;
       fg2Video.muted = true;
       closingLogoToggle?.removeAttribute('disabled');
+      if (closingLogoToggle) closingLogoToggle.checked = state.closingLogo;
+      fg2Video.classList.toggle('is-hidden', !state.closingLogo);
     } else {
       state.closingLogoAvailable = false;
       state.closingLogo = false;
@@ -531,6 +531,18 @@ async function initTemplate() {
       }
       fg2Video.classList.add('is-hidden');
     }
+
+    // The composition always uses the longest available template video.
+    const candidates = [
+      { video: bgVideo, duration: bgVideo.duration },
+      { video: fgVideo, duration: fgVideo.duration },
+      ...(state.closingLogoAvailable ? [{ video: fg2Video, duration: fg2Video.duration }] : []),
+    ].filter(item => Number.isFinite(item.duration) && item.duration > 0);
+    const longest = candidates.reduce((best, item) => !best || item.duration > best.duration ? item : best, null);
+    state.duration = longest?.duration || 0;
+    previewMasterVideo = longest?.video || bgVideo;
+    state.templateReady = Number.isFinite(state.duration) && state.duration > 0;
+    if (!state.templateReady) throw new Error('Invalid duration');
 
     $('missingAssets').classList.add('is-hidden');
     $('timeline').max = state.duration;
@@ -562,7 +574,7 @@ function setVideoTime(video, t) {
 function syncAt(t) {
   setVideoTime(bgVideo, t);
   setVideoTime(fgVideo, t);
-  if (state.closingLogo && state.closingLogoAvailable) setVideoTime(fg2Video, t);
+  if (state.closingLogoAvailable) setVideoTime(fg2Video, t);
   if (state.mediaType === 'video') setVideoTime(mediaVideo, t % Math.max(.001, mediaVideo.duration || state.duration));
   $('timeline').value = t;
   $('timeNow').textContent = formatTime(t);
@@ -573,20 +585,24 @@ $('timeline').addEventListener('input', (e) => {
   pausePreview();
   syncAt(Number(e.target.value));
 });
-$('playPause').addEventListener('click', () => bgVideo.paused ? playPreview() : pausePreview());
+$('playPause').addEventListener('click', () => previewMasterVideo.paused ? playPreview() : pausePreview());
 
 async function playPreview() {
   if (!state.templateReady) return;
   closeMobileInspector();
   object.classList.remove('is-selected');
-  if (bgVideo.currentTime >= state.duration - .02) syncAt(0);
-  setVideoTime(fgVideo, bgVideo.currentTime);
-  if (state.closingLogo && state.closingLogoAvailable) setVideoTime(fg2Video, bgVideo.currentTime);
-  if (state.mediaType === 'video') setVideoTime(mediaVideo, bgVideo.currentTime % Math.max(.001, mediaVideo.duration || state.duration));
+  let current = Number($('timeline').value) || 0;
+  if (current >= state.duration - .02) { syncAt(0); current = 0; }
+  setVideoTime(bgVideo, current);
+  setVideoTime(fgVideo, current);
+  if (state.closingLogoAvailable) setVideoTime(fg2Video, current);
+  if (state.mediaType === 'video') setVideoTime(mediaVideo, current % Math.max(.001, mediaVideo.duration || state.duration));
   try {
-    await bgVideo.play();
-    fgVideo.play().catch(() => {});
-    if (state.closingLogo && state.closingLogoAvailable) fg2Video.play().catch(() => {});
+    // The longest template video is the preview clock, even when fg2 is hidden.
+    await previewMasterVideo.play();
+    if (previewMasterVideo !== bgVideo) bgVideo.play().catch(() => {});
+    if (previewMasterVideo !== fgVideo) fgVideo.play().catch(() => {});
+    if (state.closingLogoAvailable && (state.closingLogo || previewMasterVideo === fg2Video) && previewMasterVideo !== fg2Video) fg2Video.play().catch(() => {});
     if (state.mode === 'media' && state.mediaType === 'video') mediaVideo.play().catch(() => {});
     $('playGlyph').innerHTML = '<path d="M6.5 5h2.5v10H6.5zM11 5h2.5v10H11z"/>';
     tickPreview();
@@ -598,12 +614,18 @@ function pausePreview() {
   $('playGlyph').innerHTML = '<path d="m7 5 8 5-8 5z"/>';
 }
 function tickPreview() {
-  if (bgVideo.paused) return;
-  const t = bgVideo.currentTime;
+  if (previewMasterVideo.paused) return;
+  const t = previewMasterVideo.currentTime;
   $('timeline').value = Math.min(t, state.duration);
   $('timeNow').textContent = formatTime(t);
-  if (Math.abs(fgVideo.currentTime - t) > .08) setVideoTime(fgVideo, t);
-  if (state.closingLogo && state.closingLogoAvailable && Math.abs(fg2Video.currentTime - t) > .08) setVideoTime(fg2Video, t);
+  const syncTemplateVideo = (video) => {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    const target = Math.min(t, Math.max(0, video.duration - .001));
+    if (Math.abs(video.currentTime - target) > .08) setVideoTime(video, t);
+  };
+  syncTemplateVideo(bgVideo);
+  syncTemplateVideo(fgVideo);
+  if (state.closingLogoAvailable) syncTemplateVideo(fg2Video);
   if (state.mode === 'media' && state.mediaType === 'video' && mediaVideo.duration) {
     const mt = t % mediaVideo.duration;
     if (Math.abs(mediaVideo.currentTime - mt) > .1) setVideoTime(mediaVideo, mt);
@@ -740,15 +762,17 @@ async function exportVideo() {
     } = mb;
 
     $('exportDetail').textContent = 'Reading template…';
-    const templateFetches = [fetch('./assets/bg.webm'), fetch('./assets/fg.webm')];
-    if (state.closingLogo) templateFetches.push(fetch('./assets/fg2.webm'));
-    const templateResponses = await Promise.all(templateFetches);
-    const [bgResponse, fgResponse, fg2Response] = templateResponses;
+    // Load all three template files so duration is independent of the logo toggle.
+    const [bgResponse, fgResponse, fg2Response] = await Promise.all([
+      fetch('./assets/bg.webm'),
+      fetch('./assets/fg.webm'),
+      fetch('./assets/fg2.webm').catch(() => null),
+    ]);
     if (!bgResponse.ok || !fgResponse.ok) throw new Error('Template videos could not be loaded.');
     if (state.closingLogo && !fg2Response?.ok) throw new Error('Closing logo is enabled, but assets/fg2.webm could not be loaded.');
     const bgBlob = await bgResponse.blob();
     const fgBlob = await fgResponse.blob();
-    const fg2Blob = state.closingLogo ? await fg2Response.blob() : null;
+    const fg2Blob = fg2Response?.ok ? await fg2Response.blob() : null;
 
     const bgInput = new Input({ formats: ALL_FORMATS, source: new BlobSource(bgBlob) });
     const fgInput = new Input({ formats: ALL_FORMATS, source: new BlobSource(fgBlob) });
@@ -759,7 +783,12 @@ async function exportVideo() {
     if (!bgTrack || !fgTrack) throw new Error('Both template files need a video track.');
     if (state.closingLogo && !fg2Track) throw new Error('fg2.webm needs a readable video track.');
 
-    const duration = await bgInput.computeDuration();
+    const [bgDuration, fgDuration, fg2Duration] = await Promise.all([
+      bgInput.computeDuration(),
+      fgInput.computeDuration(),
+      fg2Input ? fg2Input.computeDuration() : Promise.resolve(0),
+    ]);
+    const duration = Math.max(bgDuration || 0, fgDuration || 0, fg2Duration || 0);
     const fps = 30;
     const frameDuration = 1 / fps;
     const frameCount = Math.max(1, Math.round(duration * fps));
@@ -770,7 +799,7 @@ async function exportVideo() {
     // also produces smooth CFR output when the source cadence is slightly uneven.
     const bgSink = new CanvasSink(bgTrack, { width: 1080, height: 1920, fit: 'fill' });
     const fgSink = new CanvasSink(fgTrack, { width: 1080, height: 1920, fit: 'fill', alpha: true });
-    const fg2Sink = fg2Track ? new CanvasSink(fg2Track, { width: 1080, height: 1920, fit: 'fill', alpha: true }) : null;
+    const fg2Sink = state.closingLogo && fg2Track ? new CanvasSink(fg2Track, { width: 1080, height: 1920, fit: 'fill', alpha: true }) : null;
 
     function makeSequentialSampler(sink, endTime) {
       const iterator = sink.canvases(0, endTime)[Symbol.asyncIterator]();
@@ -799,9 +828,9 @@ async function exportVideo() {
       };
     }
 
-    const bgSampler = makeSequentialSampler(bgSink, duration + frameDuration);
-    const fgSampler = makeSequentialSampler(fgSink, duration + frameDuration);
-    const fg2Sampler = fg2Sink ? makeSequentialSampler(fg2Sink, duration + frameDuration) : null;
+    const bgSampler = makeSequentialSampler(bgSink, bgDuration + frameDuration);
+    const fgSampler = makeSequentialSampler(fgSink, fgDuration + frameDuration);
+    const fg2Sampler = fg2Sink ? makeSequentialSampler(fg2Sink, fg2Duration + frameDuration) : null;
 
     // If the templates are native ~30 fps, map source frames 1:1 to output frames.
     // This is the most deterministic path and cannot repeat a source frame because
@@ -809,15 +838,34 @@ async function exportVideo() {
     let nativeThirty = false;
     try {
       const metricPromises = [bgTrack.computeFrameRateMetrics(), fgTrack.computeFrameRateMetrics()];
-      if (fg2Track) metricPromises.push(fg2Track.computeFrameRateMetrics());
+      if (fg2Sink) metricPromises.push(fg2Track.computeFrameRateMetrics());
       const [bgFps, fgFps, fg2Fps] = await Promise.all(metricPromises);
       nativeThirty = Math.abs(bgFps.bestGuessFrameRate - fps) < 0.35 && Math.abs(fgFps.bestGuessFrameRate - fps) < 0.35;
       if (fg2Fps) nativeThirty = nativeThirty && Math.abs(fg2Fps.bestGuessFrameRate - fps) < 0.35;
       console.info('Template FPS', { background: bgFps.bestGuessFrameRate, foreground: fgFps.bestGuessFrameRate, closingLogo: fg2Fps?.bestGuessFrameRate, nativeThirty });
     } catch (_) {}
-    const bgNativeIterator = nativeThirty ? bgSink.canvases(0, duration + frameDuration)[Symbol.asyncIterator]() : null;
-    const fgNativeIterator = nativeThirty ? fgSink.canvases(0, duration + frameDuration)[Symbol.asyncIterator]() : null;
-    const fg2NativeIterator = nativeThirty && fg2Sink ? fg2Sink.canvases(0, duration + frameDuration)[Symbol.asyncIterator]() : null;
+    const bgNativeIterator = nativeThirty ? bgSink.canvases(0, bgDuration + frameDuration)[Symbol.asyncIterator]() : null;
+    const fgNativeIterator = nativeThirty ? fgSink.canvases(0, fgDuration + frameDuration)[Symbol.asyncIterator]() : null;
+    const fg2NativeIterator = nativeThirty && fg2Sink ? fg2Sink.canvases(0, fg2Duration + frameDuration)[Symbol.asyncIterator]() : null;
+
+    // Native 30 fps readers hold their final frame once a shorter layer ends.
+    // This matches browser video behavior while the composition continues to
+    // the longest of bg / fg / fg2.
+    function makeHeldNativeReader(iterator) {
+      let last = null;
+      return {
+        async nextFrame() {
+          if (iterator) {
+            const r = await iterator.next();
+            if (!r.done && r.value?.canvas) last = r.value.canvas;
+          }
+          return last;
+        }
+      };
+    }
+    const bgNativeReader = nativeThirty ? makeHeldNativeReader(bgNativeIterator) : null;
+    const fgNativeReader = nativeThirty ? makeHeldNativeReader(fgNativeIterator) : null;
+    const fg2NativeReader = nativeThirty && fg2NativeIterator ? makeHeldNativeReader(fg2NativeIterator) : null;
 
     let mediaInputExport = null, mediaIterator = null, mediaBitmap = null;
     if (state.mode === 'media' && state.mediaFile) {
@@ -866,7 +914,7 @@ async function exportVideo() {
 
     const audioPromise = (async () => {
       if (!audioSource || !audioSink) return;
-      for await (const wrapped of audioSink.buffers(0, duration)) await audioSource.add(wrapped.buffer);
+      for await (const wrapped of audioSink.buffers(0, bgDuration)) await audioSource.add(wrapped.buffer);
       audioSource.close();
     })();
 
@@ -874,15 +922,15 @@ async function exportVideo() {
       const t = i * frameDuration;
       let bgFrame, fgFrame, fg2Frame = null;
       if (nativeThirty) {
-        const nativePromises = [bgNativeIterator.next(), fgNativeIterator.next()];
-        if (fg2NativeIterator) nativePromises.push(fg2NativeIterator.next());
-        const [bgNative, fgNative, fg2Native] = await Promise.all(nativePromises);
-        if (bgNative.done || fgNative.done || !bgNative.value?.canvas || !fgNative.value?.canvas) {
-          throw new Error(`Template ended before output frame ${i + 1}. Re-export bg.webm and fg.webm at constant 30 fps.`);
-        }
-        bgFrame = { a: bgNative.value.canvas, b: null, mix: 0 };
-        fgFrame = { a: fgNative.value.canvas, b: null, mix: 0 };
-        if (fg2Native?.value?.canvas) fg2Frame = { a: fg2Native.value.canvas, b: null, mix: 0 };
+        const [bgCanvas, fgCanvas, fg2Canvas] = await Promise.all([
+          bgNativeReader.nextFrame(),
+          fgNativeReader.nextFrame(),
+          fg2NativeReader ? fg2NativeReader.nextFrame() : Promise.resolve(null),
+        ]);
+        if (!bgCanvas || !fgCanvas) throw new Error(`Could not decode template frame ${i + 1}.`);
+        bgFrame = { a: bgCanvas, b: null, mix: 0 };
+        fgFrame = { a: fgCanvas, b: null, mix: 0 };
+        if (fg2Canvas) fg2Frame = { a: fg2Canvas, b: null, mix: 0 };
       } else {
         const sampled = await Promise.all([bgSampler.sample(t), fgSampler.sample(t), fg2Sampler ? fg2Sampler.sample(t) : Promise.resolve(null)]);
         [bgFrame, fgFrame, fg2Frame] = sampled;
