@@ -219,6 +219,34 @@
       </section>
     </main>
 
+    <div id="mobileSelectionToolbar" class="mobile-selection-toolbar" aria-hidden="true">
+      <div class="mobile-selection-main">
+        <div class="mobile-font-menu">
+          <button id="mobileFontMenuButton" class="mobile-font-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span id="mobileFontLabel">Ezer SemiBold</span>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg>
+          </button>
+          <div id="mobileFontPopover" class="mobile-font-popover" role="listbox" aria-label="Font" hidden>
+            <button type="button" data-mobile-font="EzerLight" role="option">Ezer Light</button>
+            <button type="button" data-mobile-font="EzerBook" role="option">Ezer Book</button>
+            <button type="button" data-mobile-font="EzerRegular" role="option">Ezer Regular</button>
+            <button type="button" data-mobile-font="EzerSemiBold" role="option">Ezer SemiBold</button>
+            <button type="button" data-mobile-font="Gestura" role="option">Gestura Black Italic</button>
+          </div>
+        </div>
+        <div class="mobile-size-stepper" aria-label="Font size">
+          <button id="mobileFontSizeDown" type="button" aria-label="Decrease font size">−</button>
+          <output id="mobileFontSizeValue">80</output>
+          <button id="mobileFontSizeUp" type="button" aria-label="Increase font size">+</button>
+        </div>
+        <label class="mobile-color-button" title="Text color">
+          <input id="mobileSelectionColor" type="color" value="#f3f3f3" aria-label="Text color" />
+          <span id="mobileColorSwatch" aria-hidden="true"></span>
+        </label>
+        <button id="mobileSelectionMore" class="mobile-selection-more" type="button">More</button>
+      </div>
+    </div>
+
     <button id="mobileBackdrop" class="mobile-backdrop" type="button" aria-label="Close properties"></button>
 
     <div id="exportOverlay" class="export-overlay is-hidden" aria-live="polite">

@@ -50,12 +50,99 @@ const mobileMediaMode = $('mobileMediaMode');
 const mobileEditAction = $('mobileEditAction');
 const mobileStyleAction = $('mobileStyleAction');
 const mobileCenterAction = $('mobileCenterAction');
+const mobileSelectionToolbar = $('mobileSelectionToolbar');
+const mobileFontMenuButton = $('mobileFontMenuButton');
+const mobileFontPopover = $('mobileFontPopover');
+const mobileFontLabel = $('mobileFontLabel');
+const mobileFontSizeDown = $('mobileFontSizeDown');
+const mobileFontSizeUp = $('mobileFontSizeUp');
+const mobileFontSizeValue = $('mobileFontSizeValue');
+const mobileSelectionColor = $('mobileSelectionColor');
+const mobileColorSwatch = $('mobileColorSwatch');
+const mobileSelectionMore = $('mobileSelectionMore');
 const mobileQuery = window.matchMedia('(max-width: 760px)');
 let savedTextRange = null;
 let pendingExport = null;
 let previewMasterVideo = bgVideo;
 
+const MOBILE_FONT_LABELS = {
+  EzerLight: 'Ezer Light',
+  EzerBook: 'Ezer Book',
+  EzerRegular: 'Ezer Regular',
+  EzerSemiBold: 'Ezer SemiBold',
+  Gestura: 'Gestura Black Italic',
+};
+
+function savedSelectionIsUsable() {
+  if (!savedTextRange || savedTextRange.collapsed) return false;
+  const root = savedTextRange.commonAncestorContainer?.nodeType === Node.TEXT_NODE
+    ? savedTextRange.commonAncestorContainer.parentElement
+    : savedTextRange.commonAncestorContainer;
+  return !!root && editableText.contains(root);
+}
+
+function setMobileFontUi(fontKey) {
+  const key = MOBILE_FONT_LABELS[fontKey] ? fontKey : 'EzerSemiBold';
+  if (mobileFontLabel) mobileFontLabel.textContent = MOBILE_FONT_LABELS[key];
+  document.querySelectorAll('[data-mobile-font]').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.mobileFont === key);
+  });
+}
+
+function syncMobileSelectionControls() {
+  if (mobileFontSizeValue) mobileFontSizeValue.textContent = Math.round(state.fontSize);
+  if (mobileSelectionColor) mobileSelectionColor.value = state.color.toLowerCase();
+  if (mobileColorSwatch) mobileColorSwatch.style.background = state.color;
+}
+
+function hideMobileSelectionToolbar() {
+  mobileSelectionToolbar?.classList.remove('is-visible');
+  mobileSelectionToolbar?.setAttribute('aria-hidden', 'true');
+  if (mobileFontPopover) mobileFontPopover.hidden = true;
+  mobileFontMenuButton?.setAttribute('aria-expanded', 'false');
+}
+
+function positionMobileSelectionToolbar() {
+  if (!mobileSelectionToolbar?.classList.contains('is-visible')) return;
+  const vv = window.visualViewport;
+  const viewportTop = vv ? vv.offsetTop : 0;
+  const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+  const toolbarHeight = mobileSelectionToolbar.offsetHeight || 56;
+  let rect = null;
+  try { if (savedSelectionIsUsable()) rect = savedTextRange.getBoundingClientRect(); } catch (_) {}
+  if (!rect || (!rect.width && !rect.height)) rect = editableText.getBoundingClientRect();
+  let top = rect.top - toolbarHeight - 10;
+  if (top < viewportTop + 8) top = rect.bottom + 10;
+  top = Math.min(top, viewportBottom - toolbarHeight - 8);
+  top = Math.max(viewportTop + 8, top);
+  mobileSelectionToolbar.style.top = `${Math.round(top)}px`;
+}
+
+function showMobileSelectionToolbar() {
+  if (!mobileQuery.matches || state.mode !== 'text' || !state.editing || !savedSelectionIsUsable()) {
+    hideMobileSelectionToolbar();
+    return;
+  }
+  syncMobileSelectionControls();
+  mobileSelectionToolbar.classList.add('is-visible');
+  mobileSelectionToolbar.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(positionMobileSelectionToolbar);
+}
+
+function refreshMobileSelectionToolbarFromSelection() {
+  if (!mobileQuery.matches || !state.editing) return hideMobileSelectionToolbar();
+  const sel = window.getSelection();
+  if (sel?.rangeCount && sel.anchorNode && editableText.contains(sel.anchorNode)) {
+    savedTextRange = sel.getRangeAt(0).cloneRange();
+    if (sel.isCollapsed) return hideMobileSelectionToolbar();
+    return showMobileSelectionToolbar();
+  }
+  // Controls in the floating toolbar may temporarily own focus; keep using the saved range.
+  if (savedSelectionIsUsable()) showMobileSelectionToolbar();
+}
+
 function openMobileInspector() {
+  hideMobileSelectionToolbar();
   if (!mobileQuery.matches) return;
   const head = document.querySelector('.mobile-inspector-head strong');
   if (head) head.textContent = state.mode === 'text' ? 'Text style' : 'Media';
@@ -87,7 +174,9 @@ $('exportSaveButton')?.addEventListener('click', async () => {
     if (error?.name !== 'AbortError') showToast('Could not save the video.');
   }
 });
-mobileQuery.addEventListener?.('change', (e) => { if (!e.matches) closeMobileInspector(); });
+mobileQuery.addEventListener?.('change', (e) => {
+  if (!e.matches) { closeMobileInspector(); hideMobileSelectionToolbar(); }
+});
 
 closingLogoToggle?.addEventListener('change', () => {
   if (closingLogoToggle.checked && !state.closingLogoAvailable) {
@@ -202,6 +291,7 @@ function enterTextEdit(restoreSelection = false) {
 
 function exitTextEdit() {
   state.editing = false;
+  hideMobileSelectionToolbar();
   object.classList.remove('is-editing');
   editableText.contentEditable = 'false';
   window.getSelection()?.removeAllRanges();
@@ -251,14 +341,22 @@ function updateActiveFontFromSelection() {
   if (!el) return;
   const family = getComputedStyle(el).fontFamily.replace(/["']/g, '');
   const key = Object.keys(FONT_NAMES).find((k) => family.includes(FONT_NAMES[k]));
-  if (key) $('fontSelect').value = key;
+  if (key) {
+    $('fontSelect').value = key;
+    setMobileFontUi(key);
+  }
+  if (mobileQuery.matches) refreshMobileSelectionToolbarFromSelection();
 }
 
 $('fontSelect').addEventListener('change', (e) => applyFontToSelection(e.target.value));
-document.addEventListener('selectionchange', updateActiveFontFromSelection);
+document.addEventListener('selectionchange', () => {
+  updateActiveFontFromSelection();
+  if (mobileQuery.matches && state.editing) refreshMobileSelectionToolbarFromSelection();
+});
 
 $('fontSize').addEventListener('input', (e) => {
   state.fontSize = clamp(e.target.value, 16, 300);
+  syncMobileSelectionControls();
   applyVisualState();
 });
 $('tracking').addEventListener('input', (e) => {
@@ -277,6 +375,7 @@ function setColor(value) {
   state.color = normalized;
   $('colorPicker').value = normalized.toLowerCase();
   $('colorHex').value = normalized;
+  syncMobileSelectionControls();
   applyVisualState();
   return true;
 }
@@ -306,8 +405,12 @@ mobileTextMode?.addEventListener('click', () => { setMode('text'); closeMobileIn
 mobileMediaMode?.addEventListener('click', () => { setMode('media'); object.classList.add('is-selected'); if (!state.mediaFile) openMobileInspector(); });
 mobileStyleAction?.addEventListener('click', () => {
   object.classList.add('is-selected');
-  if (state.mode === 'text') openMobileInspector();
-  else { state.width = 1000; state.scale = 100; applyVisualState(); showToast('Media size reset.'); }
+  if (state.mode === 'text') {
+    if (state.editing) {
+      if (savedSelectionIsUsable()) showMobileSelectionToolbar();
+      else showToast('Select the text you want to style.');
+    } else openMobileInspector();
+  } else { state.width = 1000; state.scale = 100; applyVisualState(); showToast('Media size reset.'); }
 });
 mobileCenterAction?.addEventListener('click', () => { state.x = 50; state.y = 50; object.classList.add('is-selected'); applyVisualState(); });
 mobileEditAction?.addEventListener('click', () => {
@@ -330,9 +433,65 @@ editableText.addEventListener('keydown', (e) => {
 editableText.addEventListener('blur', () => {
   setTimeout(() => {
     const active = document.activeElement;
-    if (active !== $('fontSelect') && !editableText.contains(active)) exitTextEdit();
+    if (active !== $('fontSelect') && !editableText.contains(active) && !mobileSelectionToolbar?.contains(active)) exitTextEdit();
   }, 0);
 });
+
+editableText.addEventListener('pointerup', () => {
+  if (mobileQuery.matches && state.editing) setTimeout(refreshMobileSelectionToolbarFromSelection, 0);
+});
+editableText.addEventListener('keyup', () => {
+  if (mobileQuery.matches && state.editing) setTimeout(refreshMobileSelectionToolbarFromSelection, 0);
+});
+
+// Keep button taps from stealing focus from the contenteditable, so the keyboard and selection stay put.
+for (const control of [mobileFontMenuButton, mobileFontSizeDown, mobileFontSizeUp]) {
+  control?.addEventListener('pointerdown', (e) => e.preventDefault());
+}
+mobileFontMenuButton?.addEventListener('click', () => {
+  const nextOpen = mobileFontPopover?.hidden !== false;
+  if (mobileFontPopover) mobileFontPopover.hidden = !nextOpen;
+  mobileFontMenuButton.setAttribute('aria-expanded', String(nextOpen));
+  requestAnimationFrame(positionMobileSelectionToolbar);
+});
+
+document.querySelectorAll('[data-mobile-font]').forEach((button) => {
+  button.addEventListener('pointerdown', (e) => e.preventDefault());
+  button.addEventListener('click', () => {
+    const key = button.dataset.mobileFont;
+    $('fontSelect').value = key;
+    setMobileFontUi(key);
+    applyFontToSelection(key);
+    if (mobileFontPopover) mobileFontPopover.hidden = true;
+    mobileFontMenuButton?.setAttribute('aria-expanded', 'false');
+    showMobileSelectionToolbar();
+  });
+});
+
+function stepMobileFontSize(delta) {
+  state.fontSize = clamp(state.fontSize + delta, 16, 300);
+  $('fontSize').value = Math.round(state.fontSize);
+  syncMobileSelectionControls();
+  applyVisualState();
+  showMobileSelectionToolbar();
+}
+mobileFontSizeDown?.addEventListener('click', () => stepMobileFontSize(-2));
+mobileFontSizeUp?.addEventListener('click', () => stepMobileFontSize(2));
+mobileSelectionColor?.addEventListener('input', (e) => {
+  setColor(e.target.value);
+  showMobileSelectionToolbar();
+});
+mobileSelectionMore?.addEventListener('pointerdown', (e) => e.preventDefault());
+mobileSelectionMore?.addEventListener('click', () => {
+  hideMobileSelectionToolbar();
+  // The full panel is useful for tracking, line height, width and alignment.
+  editableText.blur();
+  setTimeout(openMobileInspector, 80);
+});
+
+window.visualViewport?.addEventListener('resize', positionMobileSelectionToolbar);
+window.visualViewport?.addEventListener('scroll', positionMobileSelectionToolbar);
+window.addEventListener('resize', positionMobileSelectionToolbar);
 
 // Direct canvas manipulation. Desktop uses handles; touch adds native drag + pinch-to-scale.
 let gesture = null;
@@ -1021,3 +1180,6 @@ setMode('text');
 setColor('#F3F3F3');
 applyVisualState(0);
 initTemplate();
+
+setMobileFontUi('EzerSemiBold');
+syncMobileSelectionControls();

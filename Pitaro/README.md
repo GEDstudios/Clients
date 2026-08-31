@@ -22,3 +22,6 @@ Upload the folder contents to a GitHub repository and enable GitHub Pages for th
 ## Branding
 
 Place the supplied Pitaro symbol at `assets/pitaro-symbol.svg`. The page uses it as the header logo and favicon.
+
+## Mobile text styling
+Tap **Edit text**, then select a word or characters. A floating typography bar appears beside the selection and stays inside the visible area above the on-screen keyboard. Font changes and size steps preserve the selected text. **More** opens the full typography panel for spacing, alignment and text-box width.
