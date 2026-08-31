@@ -72,3 +72,8 @@ No server, database, login, or uploaded-media storage is used. User media stays 
 ## Export timing
 
 The exporter writes a constant 30 fps MP4. Native ~30 fps template WebMs are decoded sequentially and mapped one source frame to one output frame, avoiding duplicate frames caused by timestamp rounding. Other frame rates use sequential resampling.
+
+
+## Optional closing logo layer
+
+Add `assets/fg2.webm` to enable the **Closing logo** checkbox. This WebM is treated as an alpha-enabled overlay above the background, editable text/media, and `fg.webm`. The checkbox is off by default. When enabled it affects both preview and MP4 export.

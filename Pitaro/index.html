@@ -149,7 +149,14 @@
             <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M3 5h12M6 9h9M9 13h6"/><circle cx="5" cy="9" r="1"/><circle cx="8" cy="13" r="1"/></svg>
             Style
           </button>
-          <div class="zoom-label">Fit</div>
+          <div class="canvas-toolbar-right">
+            <label class="closing-logo-toggle" for="closingLogoToggle">
+              <input id="closingLogoToggle" type="checkbox" />
+              <span class="checkmark" aria-hidden="true"></span>
+              <span>Closing logo</span>
+            </label>
+            <div class="zoom-label">Fit</div>
+          </div>
         </div>
 
         <div class="stage-wrap">
@@ -181,6 +188,7 @@
             </div>
 
             <video id="fgVideo" class="stage-video stage-fg" playsinline muted preload="auto"></video>
+            <video id="fg2Video" class="stage-video stage-fg2 is-hidden" playsinline muted preload="auto"></video>
           </div>
         </div>
 
