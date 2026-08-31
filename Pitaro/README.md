@@ -58,3 +58,17 @@ Then open `http://localhost:8080`.
 4. Open the generated Pages URL in an up-to-date browser.
 
 No server, database, login, or uploaded-media storage is used. User media stays in the browser.
+
+
+## Mobile controls
+
+- Tap **Text** or **Media** at the top of the canvas.
+- Drag the selected object with one finger to move it.
+- Pinch with two fingers, or drag the bottom-right handle, to scale.
+- Drag the right-side handle to change the text/media box width.
+- Text mode: use **Edit text**, **Style**, and **Center** below the timeline.
+- Media mode: use **Add/Replace**, **Reset size**, and **Center**.
+
+## Export timing
+
+The exporter writes a constant 30 fps MP4. Native ~30 fps template WebMs are decoded sequentially and mapped one source frame to one output frame, avoiding duplicate frames caused by timestamp rounding. Other frame rates use sequential resampling.

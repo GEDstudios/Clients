@@ -41,12 +41,19 @@ const selectionTag = document.querySelector('.selection-tag');
 const mobileInspectorToggle = $('mobileInspectorToggle');
 const mobileInspectorClose = $('mobileInspectorClose');
 const mobileBackdrop = $('mobileBackdrop');
+const mobileTextMode = $('mobileTextMode');
+const mobileMediaMode = $('mobileMediaMode');
+const mobileEditAction = $('mobileEditAction');
+const mobileStyleAction = $('mobileStyleAction');
+const mobileCenterAction = $('mobileCenterAction');
 const mobileQuery = window.matchMedia('(max-width: 760px)');
 let savedTextRange = null;
 let pendingExport = null;
 
 function openMobileInspector() {
   if (!mobileQuery.matches) return;
+  const head = document.querySelector('.mobile-inspector-head strong');
+  if (head) head.textContent = state.mode === 'text' ? 'Text style' : 'Media';
   document.body.classList.add('inspector-open');
   mobileInspectorToggle?.setAttribute('aria-expanded', 'true');
 }
@@ -125,6 +132,8 @@ function applyVisualState(time = bgVideo.currentTime || 0) {
   $('yField').value = Number(state.y.toFixed(1));
   $('widthField').value = Math.round(state.width);
   $('scaleField').value = Math.round(state.scale);
+  if ($('mobileWidthRange')) $('mobileWidthRange').value = Math.round(state.width);
+  if ($('mobileWidthValue')) $('mobileWidthValue').textContent = `${Math.round(state.width)} px`;
 }
 
 function setMode(mode) {
@@ -139,6 +148,10 @@ function setMode(mode) {
   updateMediaVisibility();
   object.dataset.mode = mode;
   selectionTag.textContent = text ? 'TEXT' : 'MEDIA';
+  mobileTextMode?.classList.toggle('is-active', text);
+  mobileMediaMode?.classList.toggle('is-active', !text);
+  if (mobileEditAction) mobileEditAction.querySelector('span').textContent = text ? 'Edit text' : (state.mediaFile ? 'Replace' : 'Add media');
+  if (mobileStyleAction) mobileStyleAction.querySelector('span').textContent = text ? 'Style' : 'Reset size';
 }
 
 function updateMediaVisibility() {
@@ -174,8 +187,27 @@ function exitTextEdit() {
 
 function applyFontToSelection(fontKey) {
   if (state.mode !== 'text') return;
-  if (!state.editing) enterTextEdit(true);
   const family = FONT_NAMES[fontKey] || FONT_NAMES.EzerSemiBold;
+
+  // On touch devices, keep the OS text selection intact while the Style sheet is open.
+  // Mutating the saved Range directly avoids bouncing the keyboard back up just to change a font.
+  if (mobileQuery.matches && savedTextRange && !savedTextRange.collapsed) {
+    try {
+      const range = savedTextRange.cloneRange();
+      const fragment = range.extractContents();
+      const span = document.createElement('span');
+      span.style.fontFamily = family;
+      span.appendChild(fragment);
+      span.querySelectorAll('[style]').forEach((el) => { if (el.style.fontFamily) el.style.removeProperty('font-family'); });
+      range.insertNode(span);
+      const nextRange = document.createRange();
+      nextRange.selectNodeContents(span);
+      savedTextRange = nextRange;
+      return;
+    } catch (_) {}
+  }
+
+  if (!state.editing) enterTextEdit(true);
   editableText.focus({ preventScroll: true });
   const sel = window.getSelection();
   if (sel && savedTextRange) {
@@ -248,6 +280,24 @@ $('centerObject').addEventListener('click', () => { state.x = 50; state.y = 50; 
 $('editTextButton').addEventListener('click', () => { closeMobileInspector(); setTimeout(() => enterTextEdit(true), mobileQuery.matches ? 230 : 0); });
 $('textMode').addEventListener('click', () => setMode('text'));
 $('mediaMode').addEventListener('click', () => setMode('media'));
+mobileTextMode?.addEventListener('click', () => { setMode('text'); closeMobileInspector(); object.classList.add('is-selected'); });
+mobileMediaMode?.addEventListener('click', () => { setMode('media'); object.classList.add('is-selected'); if (!state.mediaFile) openMobileInspector(); });
+mobileStyleAction?.addEventListener('click', () => {
+  object.classList.add('is-selected');
+  if (state.mode === 'text') openMobileInspector();
+  else { state.width = 1000; state.scale = 100; applyVisualState(); showToast('Media size reset.'); }
+});
+mobileCenterAction?.addEventListener('click', () => { state.x = 50; state.y = 50; object.classList.add('is-selected'); applyVisualState(); });
+mobileEditAction?.addEventListener('click', () => {
+  object.classList.add('is-selected');
+  if (state.mode === 'text') { closeMobileInspector(); setTimeout(() => enterTextEdit(true), 40); }
+  else { openMobileInspector(); setTimeout(() => mediaInput?.click(), 80); }
+});
+$('mobileWidthRange')?.addEventListener('input', (e) => {
+  state.width = clamp(e.target.value, 220, 1080);
+  const out = $('mobileWidthValue'); if (out) out.textContent = `${Math.round(state.width)} px`;
+  applyVisualState();
+});
 
 editableText.addEventListener('input', () => {
   if (!editableText.innerText.trim()) editableText.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
@@ -262,12 +312,37 @@ editableText.addEventListener('blur', () => {
   }, 0);
 });
 
-// Direct canvas manipulation: drag object, resize text box width, scale from corners.
+// Direct canvas manipulation. Desktop uses handles; touch adds native drag + pinch-to-scale.
 let gesture = null;
+const touchPointers = new Map();
+let touchGesture = null;
+
+function touchPoint(e) { return { x: e.clientX, y: e.clientY }; }
+function touchMidpoint(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+function touchDistance(a, b) { return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)); }
+
 object.addEventListener('pointerdown', (e) => {
-  if (e.isPrimary === false) return;
   object.classList.add('is-selected');
   if (state.editing || e.target.closest('.resize-handle')) return;
+  if (e.pointerType === 'touch') {
+    e.preventDefault();
+    touchPointers.set(e.pointerId, touchPoint(e));
+    try { object.setPointerCapture(e.pointerId); } catch (_) {}
+    if (touchPointers.size === 1) {
+      touchGesture = { type: 'move', start: touchPoint(e), x: state.x, y: state.y };
+    } else if (touchPointers.size === 2) {
+      const [a, b] = [...touchPointers.values()];
+      touchGesture = {
+        type: 'pinch',
+        distance: touchDistance(a, b),
+        midpoint: touchMidpoint(a, b),
+        scale: state.scale,
+        x: state.x,
+        y: state.y,
+      };
+    }
+    return;
+  }
   if (e.button !== 0) return;
   e.preventDefault();
   gesture = { type: 'move', startX: e.clientX, startY: e.clientY, x: state.x, y: state.y };
@@ -275,12 +350,49 @@ object.addEventListener('pointerdown', (e) => {
   window.addEventListener('pointerup', endGesture, { once: true });
   window.addEventListener('pointercancel', endGesture, { once: true });
 });
+
+object.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'touch' || !touchPointers.has(e.pointerId) || !touchGesture) return;
+  e.preventDefault();
+  touchPointers.set(e.pointerId, touchPoint(e));
+  const rect = stage.getBoundingClientRect();
+  if (touchPointers.size >= 2) {
+    const [a, b] = [...touchPointers.values()];
+    if (touchGesture.type !== 'pinch') {
+      touchGesture = {
+        type: 'pinch', distance: touchDistance(a,b), midpoint: touchMidpoint(a,b),
+        scale: state.scale, x: state.x, y: state.y,
+      };
+    }
+    const mid = touchMidpoint(a, b);
+    state.scale = clamp(touchGesture.scale * touchDistance(a, b) / touchGesture.distance, 10, 300);
+    state.x = clamp(touchGesture.x + ((mid.x - touchGesture.midpoint.x) / rect.width) * 100, -50, 150);
+    state.y = clamp(touchGesture.y + ((mid.y - touchGesture.midpoint.y) / rect.height) * 100, -50, 150);
+  } else if (touchGesture.type === 'move') {
+    const pt = [...touchPointers.values()][0];
+    state.x = clamp(touchGesture.x + ((pt.x - touchGesture.start.x) / rect.width) * 100, -50, 150);
+    state.y = clamp(touchGesture.y + ((pt.y - touchGesture.start.y) / rect.height) * 100, -50, 150);
+  }
+  applyVisualState();
+});
+
+function finishTouchPointer(e) {
+  if (e.pointerType !== 'touch') return;
+  touchPointers.delete(e.pointerId);
+  if (touchPointers.size === 1) {
+    const pt = [...touchPointers.values()][0];
+    touchGesture = { type: 'move', start: pt, x: state.x, y: state.y };
+  } else if (!touchPointers.size) touchGesture = null;
+}
+object.addEventListener('pointerup', finishTouchPointer);
+object.addEventListener('pointercancel', finishTouchPointer);
+
 object.addEventListener('dblclick', (e) => {
   if (state.mode === 'text' && !e.target.closest('.resize-handle')) { e.preventDefault(); enterTextEdit(); }
 });
 for (const handle of document.querySelectorAll('.resize-handle')) {
   handle.addEventListener('pointerdown', (e) => {
-    if (e.isPrimary === false || e.button !== 0) return;
+    if (e.button !== 0 && e.pointerType !== 'touch') return;
     e.preventDefault(); e.stopPropagation();
     const rect = stage.getBoundingClientRect();
     const centerX = rect.left + rect.width * state.x / 100;
@@ -303,6 +415,7 @@ for (const handle of document.querySelectorAll('.resize-handle')) {
 }
 function onGestureMove(e) {
   if (!gesture) return;
+  if (e.cancelable) e.preventDefault();
   const rect = stage.getBoundingClientRect();
   if (gesture.type === 'move') {
     state.x = clamp(gesture.x + ((e.clientX - gesture.startX) / rect.width) * 100, -50, 150);
@@ -597,20 +710,56 @@ async function exportVideo() {
     const duration = await bgInput.computeDuration();
     const fps = 30;
     const frameDuration = 1 / fps;
-    // Use a fixed CFR frame grid for the MP4. Decode the source at the midpoint of
-    // each output frame interval rather than its leading edge. WebM timestamps are
-    // often quantized to milliseconds (33/34 ms at nominal 30 fps); leading-edge
-    // sampling can therefore land just before the next source frame and repeat the
-    // previous one. Midpoint sampling selects the intended frame robustly.
     const frameCount = Math.max(1, Math.round(duration * fps));
-    const times = Array.from({ length: frameCount }, (_, i) => i * frameDuration);
-    const decodeTimes = times.map((t) => Math.min(duration - 1e-6, t + frameDuration * 0.5));
+
+    // Sequential decode with two-frame lookahead. We interpolate between the
+    // surrounding source frames instead of asking for "the last frame <= t".
+    // That avoids accidental repeats from WebM's millisecond timestamp grid and
+    // also produces smooth CFR output when the source cadence is slightly uneven.
     const bgSink = new CanvasSink(bgTrack, { width: 1080, height: 1920, fit: 'fill' });
-    // The foreground template contains transparency. CanvasSink defaults alpha to false,
-    // which would flatten transparent pixels to black and cover the whole composite.
     const fgSink = new CanvasSink(fgTrack, { width: 1080, height: 1920, fit: 'fill', alpha: true });
-    const bgIterator = bgSink.canvasesAtTimestamps(decodeTimes)[Symbol.asyncIterator]();
-    const fgIterator = fgSink.canvasesAtTimestamps(decodeTimes)[Symbol.asyncIterator]();
+
+    function makeSequentialSampler(sink, endTime) {
+      const iterator = sink.canvases(0, endTime)[Symbol.asyncIterator]();
+      let a = null, b = null, initialized = false, ended = false;
+      async function pull() {
+        const r = await iterator.next();
+        if (r.done || !r.value) { ended = true; return null; }
+        return r.value;
+      }
+      return {
+        async sample(t) {
+          if (!initialized) {
+            a = await pull();
+            b = await pull();
+            initialized = true;
+          }
+          if (!a) return null;
+          while (b && t >= b.timestamp) {
+            a = b;
+            b = await pull();
+          }
+          if (!b || ended || b.timestamp <= a.timestamp) return { a: a.canvas, b: null, mix: 0 };
+          const mix = Math.max(0, Math.min(1, (t - a.timestamp) / (b.timestamp - a.timestamp)));
+          return { a: a.canvas, b: b.canvas, mix };
+        }
+      };
+    }
+
+    const bgSampler = makeSequentialSampler(bgSink, duration + frameDuration);
+    const fgSampler = makeSequentialSampler(fgSink, duration + frameDuration);
+
+    // If the templates are native ~30 fps, map source frames 1:1 to output frames.
+    // This is the most deterministic path and cannot repeat a source frame because
+    // of timestamp rounding. Other source rates fall back to sequential resampling.
+    let nativeThirty = false;
+    try {
+      const [bgFps, fgFps] = await Promise.all([bgTrack.computeFrameRateMetrics(), fgTrack.computeFrameRateMetrics()]);
+      nativeThirty = Math.abs(bgFps.bestGuessFrameRate - fps) < 0.35 && Math.abs(fgFps.bestGuessFrameRate - fps) < 0.35;
+      console.info('Template FPS', { background: bgFps.bestGuessFrameRate, foreground: fgFps.bestGuessFrameRate, nativeThirty });
+    } catch (_) {}
+    const bgNativeIterator = nativeThirty ? bgSink.canvases(0, duration + frameDuration)[Symbol.asyncIterator]() : null;
+    const fgNativeIterator = nativeThirty ? fgSink.canvases(0, duration + frameDuration)[Symbol.asyncIterator]() : null;
 
     let mediaInputExport = null, mediaIterator = null, mediaBitmap = null;
     if (state.mode === 'media' && state.mediaFile) {
@@ -626,7 +775,7 @@ async function exportVideo() {
         if (mw && mh) state.mediaRatio = mw / mh;
         const mediaDuration = await mediaTrack.computeDuration();
         const mediaSink = new CanvasSink(mediaTrack);
-        const mediaTimes = decodeTimes.map((t) => t % Math.max(frameDuration, mediaDuration));
+        const mediaTimes = Array.from({ length: frameCount }, (_, i) => (i * frameDuration) % Math.max(frameDuration, mediaDuration));
         // Looping timestamps are not monotonic; getCanvas is safer for the occasional uploaded clip.
         mediaIterator = { next: async (i) => ({ value: await mediaSink.getCanvas(mediaTimes[i]), done: false }) };
       }
@@ -664,15 +813,29 @@ async function exportVideo() {
     })();
 
     for (let i = 0; i < frameCount; i++) {
-      const t = times[i];
-      const [bgResult, fgResult] = await Promise.all([bgIterator.next(), fgIterator.next()]);
-      const bgFrame = bgResult.value?.canvas;
-      const fgFrame = fgResult.value?.canvas;
-      if (!bgFrame || !fgFrame) throw new Error(`Could not decode frame ${i + 1}.`);
+      const t = i * frameDuration;
+      let bgFrame, fgFrame;
+      if (nativeThirty) {
+        const [bgNative, fgNative] = await Promise.all([bgNativeIterator.next(), fgNativeIterator.next()]);
+        if (bgNative.done || fgNative.done || !bgNative.value?.canvas || !fgNative.value?.canvas) {
+          throw new Error(`Template ended before output frame ${i + 1}. Re-export bg.webm and fg.webm at constant 30 fps.`);
+        }
+        bgFrame = { a: bgNative.value.canvas, b: null, mix: 0 };
+        fgFrame = { a: fgNative.value.canvas, b: null, mix: 0 };
+      } else {
+        [bgFrame, fgFrame] = await Promise.all([bgSampler.sample(t), fgSampler.sample(t)]);
+      }
+      if (!bgFrame?.a || !fgFrame?.a) throw new Error(`Could not decode frame ${i + 1}.`);
 
       ctx.clearRect(0, 0, 1080, 1920);
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 1080, 1920);
-      ctx.drawImage(bgFrame, 0, 0, 1080, 1920);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(bgFrame.a, 0, 0, 1080, 1920);
+      if (bgFrame.b && bgFrame.mix > .0001) {
+        ctx.globalAlpha = bgFrame.mix;
+        ctx.drawImage(bgFrame.b, 0, 0, 1080, 1920);
+        ctx.globalAlpha = 1;
+      }
 
       if (state.mode === 'text') drawTextLayer(ctx, t);
       else if (state.mediaType === 'image' && mediaBitmap) drawMediaLayer(ctx, mediaBitmap, t);
@@ -681,7 +844,13 @@ async function exportVideo() {
         if (mediaResult.value?.canvas) drawMediaLayer(ctx, mediaResult.value.canvas, t);
       }
 
-      ctx.drawImage(fgFrame, 0, 0, 1080, 1920);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(fgFrame.a, 0, 0, 1080, 1920);
+      if (fgFrame.b && fgFrame.mix > .0001) {
+        ctx.globalAlpha = fgFrame.mix;
+        ctx.drawImage(fgFrame.b, 0, 0, 1080, 1920);
+        ctx.globalAlpha = 1;
+      }
       await videoSource.add(t, frameDuration, i % (fps * 2) === 0 ? { keyFrame: true } : undefined);
 
       const pct = Math.round(((i + 1) / frameCount) * 96);
