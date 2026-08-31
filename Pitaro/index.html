@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f5f5f2" />
+  <title>Toolbox Video Maker</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">VIDEO TOOL</div>
+        <h1>Toolbox Maker</h1>
+      </div>
+      <div id="assetStatus" class="status-pill" data-state="loading">Loading template…</div>
+    </header>
+
+    <main class="workspace">
+      <section class="controls" aria-label="Editor controls">
+        <div class="section-block">
+          <div class="section-label">Content</div>
+          <div class="segmented" role="group" aria-label="Middle layer type">
+            <button id="textModeBtn" class="segmented-btn is-active" type="button">Text</button>
+            <button id="mediaModeBtn" class="segmented-btn" type="button">Photo / video</button>
+          </div>
+        </div>
+
+        <div id="textControls" class="section-block">
+          <label class="field-label" for="richTextEditor">Text</label>
+          <div id="richTextEditor" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"><span class="font-ezer-semibold">Meet your new </span><span class="font-gestura">Toolbox</span></div>
+          <div class="format-row">
+            <label class="select-wrap">
+              <span>Font for selection</span>
+              <select id="fontSelect" aria-label="Font for selected text">
+                <option value="EzerLight">Ezer Standard Light</option>
+                <option value="EzerBook">Ezer Standard Book</option>
+                <option value="EzerRegular">Ezer Standard Regular</option>
+                <option value="EzerSemiBold" selected>Ezer Standard SemiBold</option>
+                <option value="GesturaBlackItalic">Gestura Text Black Italic</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">Select any characters in the text box, then choose a font.</p>
+        </div>
+
+        <div id="mediaControls" class="section-block is-hidden">
+          <label class="field-label" for="mediaInput">Photo or video</label>
+          <label id="dropZone" class="drop-zone" for="mediaInput">
+            <input id="mediaInput" type="file" accept="image/*,video/*,.mov,.mkv,.webm,.mp4,.m4v,.avi" />
+            <span class="drop-icon">＋</span>
+            <span id="dropLabel">Choose a file</span>
+            <small>Image or video. Kept local in your browser.</small>
+          </label>
+          <button id="removeMediaBtn" class="text-button is-hidden" type="button">Remove media</button>
+        </div>
+
+        <div class="section-block">
+          <div class="section-heading-row">
+            <div class="section-label">Placement</div>
+            <button id="centerBtn" class="text-button" type="button">Center</button>
+          </div>
+          <label class="range-field">
+            <span>Size</span>
+            <output id="scaleOutput">100%</output>
+            <input id="scaleSlider" type="range" min="20" max="220" step="1" value="100" />
+          </label>
+          <p class="hint">Drag the middle layer directly in the preview. Text grows linearly by 2% per second during playback and export.</p>
+        </div>
+
+        <div class="section-block export-block">
+          <button id="exportBtn" class="primary-button" type="button" disabled>Export MP4</button>
+          <div id="exportProgressWrap" class="progress-wrap is-hidden" aria-live="polite">
+            <div class="progress-track"><div id="exportProgress" class="progress-bar"></div></div>
+            <div class="progress-copy"><span id="exportStatus">Preparing…</span><span id="exportPercent">0%</span></div>
+          </div>
+          <p class="export-note">1080 × 1920 · 30 fps · H.264 MP4 · high bitrate</p>
+        </div>
+      </section>
+
+      <section class="preview-column" aria-label="Video preview">
+        <div id="stage" class="stage" tabindex="0" aria-label="Video preview. Drag the middle layer to reposition it.">
+          <div id="stagePlaceholder" class="stage-placeholder">
+            <strong>Template videos not found</strong>
+            <span>Add <code>assets/bg.webm</code> and <code>assets/fg.webm</code>.</span>
+          </div>
+          <video id="bgVideo" class="template-video bg-video" playsinline preload="auto"></video>
+          <div id="middleLayer" class="middle-layer" aria-hidden="true">
+            <div id="previewText" class="preview-text"><span class="font-ezer-semibold">Meet your new </span><span class="font-gestura">Toolbox</span></div>
+            <img id="previewImage" class="preview-media is-hidden" alt="Uploaded middle layer" />
+            <video id="previewMediaVideo" class="preview-media is-hidden" playsinline muted preload="metadata"></video>
+          </div>
+          <video id="fgVideo" class="template-video fg-video" playsinline muted preload="auto"></video>
+          <div id="dragHint" class="drag-hint">Drag to move</div>
+        </div>
+
+        <div class="transport">
+          <button id="playBtn" class="play-button" type="button" aria-label="Play preview" disabled>
+            <span id="playIcon">▶</span>
+          </button>
+          <span id="currentTimeLabel" class="time-label">0:00.00</span>
+          <input id="timeline" class="timeline" type="range" min="0" max="1" step="0.001" value="0" disabled aria-label="Video timeline" />
+          <span id="durationLabel" class="time-label">0:00.00</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
