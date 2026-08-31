@@ -217,6 +217,7 @@ editableText.addEventListener('blur', () => {
 // Direct canvas manipulation: drag object, resize text box width, scale from corners.
 let gesture = null;
 object.addEventListener('pointerdown', (e) => {
+  object.classList.add('is-selected');
   if (state.editing || e.target.closest('.resize-handle')) return;
   if (e.button !== 0) return;
   e.preventDefault();
@@ -271,7 +272,14 @@ function endGesture() {
 }
 
 stage.addEventListener('pointerdown', (e) => {
-  if (e.target === stage || e.target.classList.contains('stage-video')) object.classList.add('is-selected');
+  if (e.target === stage || e.target.closest('.missing-assets')) {
+    exitTextEdit();
+    object.classList.remove('is-selected');
+  }
+});
+
+stage.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !state.editing) object.classList.remove('is-selected');
 });
 
 // Media upload / drop.
@@ -364,6 +372,7 @@ $('playPause').addEventListener('click', () => bgVideo.paused ? playPreview() : 
 
 async function playPreview() {
   if (!state.templateReady) return;
+  object.classList.remove('is-selected');
   if (bgVideo.currentTime >= state.duration - .02) syncAt(0);
   setVideoTime(fgVideo, bgVideo.currentTime);
   if (state.mediaType === 'video') setVideoTime(mediaVideo, bgVideo.currentTime % Math.max(.001, mediaVideo.duration || state.duration));
@@ -502,6 +511,7 @@ async function exportVideo() {
   if (!('VideoEncoder' in window)) return showToast('Use current Chrome or Edge for MP4 export.');
   pausePreview();
   exitTextEdit();
+  object.classList.remove('is-selected');
   $('exportOverlay').classList.remove('is-hidden');
   $('progressFill').style.width = '0%';
   $('progressPercent').textContent = '0%';
@@ -530,8 +540,10 @@ async function exportVideo() {
     const fps = 30;
     const frameCount = Math.ceil(duration * fps);
     const times = Array.from({ length: frameCount }, (_, i) => i / fps);
-    const bgSink = new CanvasSink(bgTrack);
-    const fgSink = new CanvasSink(fgTrack);
+    const bgSink = new CanvasSink(bgTrack, { width: 1080, height: 1920, fit: 'fill' });
+    // The foreground template contains transparency. CanvasSink defaults alpha to false,
+    // which would flatten transparent pixels to black and cover the whole composite.
+    const fgSink = new CanvasSink(fgTrack, { width: 1080, height: 1920, fit: 'fill', alpha: true });
     const bgIterator = bgSink.canvasesAtTimestamps(times)[Symbol.asyncIterator]();
     const fgIterator = fgSink.canvasesAtTimestamps(times)[Symbol.asyncIterator]();
 
