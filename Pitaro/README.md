@@ -25,7 +25,6 @@ The included fonts are already wired into the editor:
 - The middle layer can be rich text or uploaded image/video.
 - Text fonts can be changed on a text selection.
 - Direct manipulation: drag the object, resize its text/media box with side handles, scale with corner handles, double-click text to edit.
-- The middle layer shrinks linearly by 2% per second in preview and export.
 - Media and foreground audio are muted; only `bg.webm` audio is exported.
 
 ## Run locally

@@ -12,9 +12,9 @@ const state = {
   mode: 'text',
   x: 50,
   y: 50,
-  width: 860,
+  width: 1000,
   scale: 100,
-  fontSize: 92,
+  fontSize: 80,
   color: '#F3F3F3',
   tracking: 0,
   lineHeight: 108,
@@ -326,14 +326,10 @@ async function initTemplate() {
     $('playPause').disabled = false;
     $('exportButton').disabled = false;
     $('timeTotal').textContent = formatTime(state.duration);
-    $('templateState').dataset.state = 'ready';
-    $('templateStateText').textContent = 'Template ready';
     fgVideo.muted = true;
     syncAt(0);
   } catch (_) {
     state.templateReady = false;
-    $('templateState').dataset.state = 'error';
-    $('templateStateText').textContent = 'Template missing';
   }
 }
 function waitForMetadata(video) {

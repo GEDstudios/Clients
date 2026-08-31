@@ -19,10 +19,6 @@
       </div>
 
       <div class="topbar-actions">
-        <div id="templateState" class="template-state" data-state="loading">
-          <span class="state-dot"></span>
-          <span id="templateStateText">Loading template</span>
-        </div>
         <button id="exportButton" class="export-button" type="button" disabled>
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0 3.5-3.5M10 12 6.5 8.5M4 14.5V17h12v-2.5"/></svg>
           Export MP4
@@ -68,7 +64,7 @@
             <div class="split-row">
               <label class="field-card">
                 <span class="field-prefix">T</span>
-                <input id="fontSize" type="number" min="16" max="300" step="1" value="92" aria-label="Font size" />
+                <input id="fontSize" type="number" min="16" max="300" step="1" value="80" aria-label="Font size" />
                 <small>px</small>
               </label>
               <label class="field-card color-card" title="Text color">
@@ -121,14 +117,10 @@
           <div class="transform-grid">
             <label class="numeric-field"><span>X</span><input id="xField" type="number" min="-50" max="150" step="0.1" value="50" /><small>%</small></label>
             <label class="numeric-field"><span>Y</span><input id="yField" type="number" min="-50" max="150" step="0.1" value="50" /><small>%</small></label>
-            <label class="numeric-field"><span>W</span><input id="widthField" type="number" min="100" max="1080" step="1" value="860" /><small>px</small></label>
+            <label class="numeric-field"><span>W</span><input id="widthField" type="number" min="100" max="1080" step="1" value="1000" /><small>px</small></label>
             <label class="numeric-field"><span>S</span><input id="scaleField" type="number" min="10" max="300" step="1" value="100" /><small>%</small></label>
           </div>
 
-          <div class="animation-note">
-            <div class="motion-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10h10M11.5 6.5 15 10l-3.5 3.5"/></svg></div>
-            <div><strong>Scale animation</strong><span>Linear shrink · 2% per second</span></div>
-          </div>
         </section>
 
         <section class="inspector-section output-summary">
@@ -140,7 +132,7 @@
 
       <section class="canvas-area" aria-label="Composition preview">
         <div class="canvas-toolbar">
-          <div class="canvas-status"><span class="live-dot"></span>Live preview</div>
+          <div></div>
           <div class="zoom-label">Fit</div>
         </div>
 
