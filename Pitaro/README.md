@@ -1,15 +1,15 @@
 # Toolbox Composer
 
-A static, client-side social video composition tool designed for GitHub Pages.
+Static, client-side social video compositor for GitHub Pages.
 
 ## Required template assets
 
 Place these two files in `assets/`:
 
-- `assets/bg.webm` — background video. Its duration is the output duration and its audio is the only audio used.
-- `assets/fg.webm` — foreground video with alpha/transparency. It should match the background duration.
+- `assets/bg.webm` — background video. Its duration defines the output duration; its audio is the only exported audio.
+- `assets/fg.webm` — foreground video with alpha/transparency, matching the background duration.
 
-The included fonts are already wired into the editor:
+Included fonts:
 
 - Ezer Standard Light
 - Ezer Standard Book
@@ -20,18 +20,29 @@ The included fonts are already wired into the editor:
 ## Editor behavior
 
 - Output: 1080×1920, 30 fps, H.264 MP4, high bitrate.
-- Text is centered by default and starts at `#F3F3F3`.
-- Default copy: “Meet your new Toolbox”. “Toolbox” uses Gestura Text Black Italic.
-- The middle layer can be rich text or uploaded image/video.
-- Text fonts can be changed on a text selection.
-- Direct manipulation: drag the object, resize its text/media box with side handles, scale with corner handles, double-click text to edit.
-- Media and foreground audio are muted; only `bg.webm` audio is exported.
+- Default text size: 80 px.
+- Default text box width: 1000 px.
+- Default text color: `#F3F3F3`.
+- Default copy: “Meet your new Toolbox”; “Toolbox” uses Gestura Text Black Italic.
+- Middle layer can be rich text or an uploaded image/video.
+- Font can be applied to selected characters.
+- Drag to move, side handles change box width, corner handles scale, double-click/double-tap text to edit.
+- Selection bounds only appear while the object is selected.
+- Only `bg.webm` audio is exported.
+
+## Mobile behavior
+
+- Canvas remains the primary view; properties open as a bottom sheet.
+- Touch targets and resize handles are enlarged for fingers.
+- The canvas allows normal page scrolling except while directly manipulating the selected object.
+- Form controls use mobile-safe sizing to avoid unwanted browser zoom.
+- Text selections are preserved when moving between the canvas and typography controls.
+- On touch devices, completed renders present a **Save video** action so the browser gets a fresh user gesture for saving/sharing the MP4.
+- Safe-area insets are respected on notched/home-indicator devices.
 
 ## Run locally
 
-Because the editor loads media and an ES module, use a local web server instead of opening `index.html` directly.
-
-For example:
+Use a local web server instead of opening `index.html` directly:
 
 ```bash
 python3 -m http.server 8080
@@ -42,8 +53,8 @@ Then open `http://localhost:8080`.
 ## GitHub Pages
 
 1. Upload the project contents to a GitHub repository.
-2. Add your `bg.webm` and `fg.webm` inside the `assets` folder.
+2. Add `bg.webm` and `fg.webm` inside `assets/`.
 3. In repository Settings → Pages, deploy from the main branch/root.
-4. Open the generated GitHub Pages URL in current Chrome or Edge for the most reliable client-side H.264/AAC export.
+4. Open the generated Pages URL in an up-to-date browser.
 
 No server, database, login, or uploaded-media storage is used. User media stays in the browser.

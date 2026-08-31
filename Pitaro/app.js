@@ -38,6 +38,44 @@ const fgVideo = $('fgVideo');
 const mediaImage = $('mediaImage');
 const mediaVideo = $('mediaVideo');
 const selectionTag = document.querySelector('.selection-tag');
+const mobileInspectorToggle = $('mobileInspectorToggle');
+const mobileInspectorClose = $('mobileInspectorClose');
+const mobileBackdrop = $('mobileBackdrop');
+const mobileQuery = window.matchMedia('(max-width: 760px)');
+let savedTextRange = null;
+let pendingExport = null;
+
+function openMobileInspector() {
+  if (!mobileQuery.matches) return;
+  document.body.classList.add('inspector-open');
+  mobileInspectorToggle?.setAttribute('aria-expanded', 'true');
+}
+function closeMobileInspector() {
+  document.body.classList.remove('inspector-open');
+  mobileInspectorToggle?.setAttribute('aria-expanded', 'false');
+}
+mobileInspectorToggle?.addEventListener('click', openMobileInspector);
+mobileInspectorClose?.addEventListener('click', closeMobileInspector);
+mobileBackdrop?.addEventListener('click', closeMobileInspector);
+$('exportSaveButton')?.addEventListener('click', async () => {
+  if (!pendingExport) return;
+  const { url, file } = pendingExport;
+  try {
+    if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+      await navigator.share({ files: [file], title: 'Toolbox video' });
+    } else {
+      const a = document.createElement('a');
+      a.href = url; a.download = file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+    $('exportOverlay').classList.add('is-hidden');
+    URL.revokeObjectURL(url);
+    pendingExport = null;
+  } catch (error) {
+    if (error?.name !== 'AbortError') showToast('Could not save the video.');
+  }
+});
+mobileQuery.addEventListener?.('change', (e) => { if (!e.matches) closeMobileInspector(); });
 
 function clamp(value, min, max) {
   const n = Number(value);
@@ -109,19 +147,22 @@ function updateMediaVisibility() {
   mediaVideo.classList.toggle('is-hidden', !(show && state.mediaType === 'video'));
 }
 
-function enterTextEdit() {
+function enterTextEdit(restoreSelection = false) {
   if (state.mode !== 'text') return;
   state.editing = true;
-  object.classList.add('is-editing');
+  object.classList.add('is-editing', 'is-selected');
   editableText.contentEditable = 'true';
   editableText.focus({ preventScroll: true });
   const sel = window.getSelection();
-  if (sel && sel.rangeCount === 0) {
-    const range = document.createRange();
-    range.selectNodeContents(editableText);
-    range.collapse(false);
-    sel.addRange(range);
+  if (!sel) return;
+  sel.removeAllRanges();
+  if (restoreSelection && savedTextRange) {
+    try { sel.addRange(savedTextRange.cloneRange()); return; } catch (_) {}
   }
+  const range = document.createRange();
+  range.selectNodeContents(editableText);
+  range.collapse(false);
+  sel.addRange(range);
 }
 
 function exitTextEdit() {
@@ -133,18 +174,25 @@ function exitTextEdit() {
 
 function applyFontToSelection(fontKey) {
   if (state.mode !== 'text') return;
-  if (!state.editing) enterTextEdit();
+  if (!state.editing) enterTextEdit(true);
   const family = FONT_NAMES[fontKey] || FONT_NAMES.EzerSemiBold;
   editableText.focus({ preventScroll: true });
+  const sel = window.getSelection();
+  if (sel && savedTextRange) {
+    try { sel.removeAllRanges(); sel.addRange(savedTextRange.cloneRange()); } catch (_) {}
+  }
   try {
     document.execCommand('styleWithCSS', false, true);
     document.execCommand('fontName', false, family);
+    const current = window.getSelection();
+    if (current?.rangeCount && editableText.contains(current.anchorNode)) savedTextRange = current.getRangeAt(0).cloneRange();
   } catch (_) {}
 }
 
 function updateActiveFontFromSelection() {
   const sel = window.getSelection();
   if (!sel || !sel.anchorNode || !editableText.contains(sel.anchorNode)) return;
+  if (sel.rangeCount) savedTextRange = sel.getRangeAt(0).cloneRange();
   const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
   if (!el) return;
   const family = getComputedStyle(el).fontFamily.replace(/["']/g, '');
@@ -197,7 +245,7 @@ $('yField').addEventListener('input', (e) => { state.y = clamp(e.target.value, -
 $('widthField').addEventListener('input', (e) => { state.width = clamp(e.target.value, 100, 1080); applyVisualState(); });
 $('scaleField').addEventListener('input', (e) => { state.scale = clamp(e.target.value, 10, 300); applyVisualState(); });
 $('centerObject').addEventListener('click', () => { state.x = 50; state.y = 50; applyVisualState(); });
-$('editTextButton').addEventListener('click', enterTextEdit);
+$('editTextButton').addEventListener('click', () => { closeMobileInspector(); setTimeout(() => enterTextEdit(true), mobileQuery.matches ? 230 : 0); });
 $('textMode').addEventListener('click', () => setMode('text'));
 $('mediaMode').addEventListener('click', () => setMode('media'));
 
@@ -217,6 +265,7 @@ editableText.addEventListener('blur', () => {
 // Direct canvas manipulation: drag object, resize text box width, scale from corners.
 let gesture = null;
 object.addEventListener('pointerdown', (e) => {
+  if (e.isPrimary === false) return;
   object.classList.add('is-selected');
   if (state.editing || e.target.closest('.resize-handle')) return;
   if (e.button !== 0) return;
@@ -224,13 +273,14 @@ object.addEventListener('pointerdown', (e) => {
   gesture = { type: 'move', startX: e.clientX, startY: e.clientY, x: state.x, y: state.y };
   window.addEventListener('pointermove', onGestureMove);
   window.addEventListener('pointerup', endGesture, { once: true });
+  window.addEventListener('pointercancel', endGesture, { once: true });
 });
 object.addEventListener('dblclick', (e) => {
   if (state.mode === 'text' && !e.target.closest('.resize-handle')) { e.preventDefault(); enterTextEdit(); }
 });
 for (const handle of document.querySelectorAll('.resize-handle')) {
   handle.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
+    if (e.isPrimary === false || e.button !== 0) return;
     e.preventDefault(); e.stopPropagation();
     const rect = stage.getBoundingClientRect();
     const centerX = rect.left + rect.width * state.x / 100;
@@ -248,6 +298,7 @@ for (const handle of document.querySelectorAll('.resize-handle')) {
     };
     window.addEventListener('pointermove', onGestureMove);
     window.addEventListener('pointerup', endGesture, { once: true });
+    window.addEventListener('pointercancel', endGesture, { once: true });
   });
 }
 function onGestureMove(e) {
@@ -268,6 +319,7 @@ function onGestureMove(e) {
 }
 function endGesture() {
   window.removeEventListener('pointermove', onGestureMove);
+  window.removeEventListener('pointercancel', endGesture);
   gesture = null;
 }
 
@@ -372,6 +424,7 @@ $('playPause').addEventListener('click', () => bgVideo.paused ? playPreview() : 
 
 async function playPreview() {
   if (!state.templateReady) return;
+  closeMobileInspector();
   object.classList.remove('is-selected');
   if (bgVideo.currentTime >= state.duration - .02) syncAt(0);
   setVideoTime(fgVideo, bgVideo.currentTime);
@@ -507,14 +560,19 @@ async function imageBitmapFromFile(file) {
 
 $('exportButton').addEventListener('click', exportVideo);
 async function exportVideo() {
+  closeMobileInspector();
   if (!state.templateReady) return showToast('Add bg.webm and fg.webm first.');
-  if (!('VideoEncoder' in window)) return showToast('Use current Chrome or Edge for MP4 export.');
+  if (!('VideoEncoder' in window)) return showToast('This browser cannot encode MP4. Update the browser or try Chrome, Edge, or Safari.');
   pausePreview();
   exitTextEdit();
   object.classList.remove('is-selected');
   $('exportOverlay').classList.remove('is-hidden');
   $('progressFill').style.width = '0%';
   $('progressPercent').textContent = '0%';
+  $('exportTitle').textContent = 'Rendering video';
+  $('exportSaveButton').classList.add('is-hidden');
+  if (pendingExport?.url) URL.revokeObjectURL(pendingExport.url);
+  pendingExport = null;
   $('exportDetail').textContent = 'Loading renderer…';
 
   try {
@@ -638,17 +696,27 @@ async function exportVideo() {
     await output.finalize();
 
     const blob = new Blob([target.buffer], { type: 'video/mp4' });
+    const file = new File([blob], 'toolbox-video.mp4', { type: 'video/mp4' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'toolbox-video.mp4';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 3000);
     if (mediaBitmap?.close) mediaBitmap.close();
 
     $('progressFill').style.width = '100%'; $('progressPercent').textContent = '100%';
     $('exportDetail').textContent = 'Done';
-    setTimeout(() => $('exportOverlay').classList.add('is-hidden'), 650);
-    showToast('MP4 exported.');
+
+    const touchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (touchDevice) {
+      pendingExport = { url, file };
+      $('exportSaveButton').classList.remove('is-hidden');
+      $('exportTitle').textContent = 'Video ready';
+      $('exportDetail').textContent = 'Save or share the MP4';
+    } else {
+      const a = document.createElement('a');
+      a.href = url; a.download = file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      setTimeout(() => $('exportOverlay').classList.add('is-hidden'), 650);
+      showToast('MP4 exported.');
+    }
   } catch (error) {
     console.error(error);
     $('exportOverlay').classList.add('is-hidden');
@@ -658,6 +726,7 @@ async function exportVideo() {
 
 new ResizeObserver(updateStageUnit).observe(stage);
 window.addEventListener('resize', updateStageUnit);
+window.addEventListener('orientationchange', () => setTimeout(updateStageUnit, 120));
 setMode('text');
 setColor('#F3F3F3');
 applyVisualState(0);
