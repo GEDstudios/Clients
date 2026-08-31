@@ -1,802 +1,648 @@
-import {
-  ALL_FORMATS,
-  AudioBufferSink,
-  AudioBufferSource,
-  BlobSource,
-  BufferTarget,
-  CanvasSink,
-  CanvasSource,
-  Input,
-  Mp4OutputFormat,
-  Output,
-  Quality,
-  canEncodeAudio,
-  canEncodeVideo,
-} from 'https://cdn.jsdelivr.net/npm/mediabunny@1.55.4/+esm';
-import { registerAacEncoder } from 'https://cdn.jsdelivr.net/npm/@mediabunny/aac-encoder@1.55.4/+esm';
-
-const WIDTH = 1080;
-const HEIGHT = 1920;
-const FPS = 30;
-const DEFAULT_TEXT_SIZE = 92;
-const TEXT_SCALE_DOWN_PER_SECOND = 0.02;
-const VIDEO_BITRATE = 20_000_000;
-const AUDIO_BITRATE = 256_000;
-
 const $ = (id) => document.getElementById(id);
-const els = {
-  assetStatus: $('assetStatus'),
-  textModeBtn: $('textModeBtn'),
-  mediaModeBtn: $('mediaModeBtn'),
-  textControls: $('textControls'),
-  mediaControls: $('mediaControls'),
-  richTextEditor: $('richTextEditor'),
-  fontSelect: $('fontSelect'),
-  fontSizeInput: $('fontSizeInput'),
-  trackingInput: $('trackingInput'),
-  lineHeightInput: $('lineHeightInput'),
-  textColorInput: $('textColorInput'),
-  textColorValue: $('textColorValue'),
-  mediaInput: $('mediaInput'),
-  dropZone: $('dropZone'),
-  dropLabel: $('dropLabel'),
-  removeMediaBtn: $('removeMediaBtn'),
-  centerBtn: $('centerBtn'),
-  xInput: $('xInput'),
-  yInput: $('yInput'),
-  scaleInput: $('scaleInput'),
-  scaleSlider: $('scaleSlider'),
-  scaleOutput: $('scaleOutput'),
-  exportBtn: $('exportBtn'),
-  exportProgressWrap: $('exportProgressWrap'),
-  exportProgress: $('exportProgress'),
-  exportStatus: $('exportStatus'),
-  exportPercent: $('exportPercent'),
-  stage: $('stage'),
-  stagePlaceholder: $('stagePlaceholder'),
-  bgVideo: $('bgVideo'),
-  fgVideo: $('fgVideo'),
-  middleLayer: $('middleLayer'),
-  previewText: $('previewText'),
-  previewImage: $('previewImage'),
-  previewMediaVideo: $('previewMediaVideo'),
-  playBtn: $('playBtn'),
-  playIcon: $('playIcon'),
-  currentTimeLabel: $('currentTimeLabel'),
-  durationLabel: $('durationLabel'),
-  timeline: $('timeline'),
+
+const FONT_NAMES = {
+  EzerLight: 'EzerLight',
+  EzerBook: 'EzerBook',
+  EzerRegular: 'EzerRegular',
+  EzerSemiBold: 'EzerSemiBold',
+  Gestura: 'Gestura',
 };
 
 const state = {
   mode: 'text',
-  x: 0.5,
-  y: 0.5,
-  scale: 1,
-  fontSize: DEFAULT_TEXT_SIZE,
+  x: 50,
+  y: 50,
+  width: 860,
+  scale: 100,
+  fontSize: 92,
+  color: '#F3F3F3',
   tracking: 0,
-  lineHeight: 1.08,
-  textColor: '#111111',
+  lineHeight: 108,
+  align: 'center',
   duration: 0,
-  templateReady: false,
-  currentTime: 0,
-  isPlaying: false,
-  raf: 0,
-  savedRange: null,
+  editing: false,
   mediaFile: null,
-  mediaKind: null,
+  mediaType: null,
   mediaUrl: null,
-  exporting: false,
+  mediaRatio: 1,
+  templateReady: false,
+  raf: null,
 };
 
-const fontMap = [
-  ['GesturaBlackItalic', 'GesturaBlackItalic'],
-  ['EzerSemiBold', 'EzerSemiBold'],
-  ['EzerRegular', 'EzerRegular'],
-  ['EzerBook', 'EzerBook'],
-  ['EzerLight', 'EzerLight'],
-];
+const stage = $('stage');
+const object = $('object');
+const objectContent = $('objectContent');
+const editableText = $('editableText');
+const bgVideo = $('bgVideo');
+const fgVideo = $('fgVideo');
+const mediaImage = $('mediaImage');
+const mediaVideo = $('mediaVideo');
+const selectionTag = document.querySelector('.selection-tag');
 
-function knownFontFromCss(value = '') {
-  const clean = value.replaceAll('"', '').replaceAll("'", '');
-  for (const [needle, family] of fontMap) {
-    if (clean.includes(needle)) return family;
-  }
-  return 'EzerSemiBold';
+function clamp(value, min, max) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
 }
 
-function formatTime(seconds) {
-  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-  const mins = Math.floor(safe / 60);
-  const secs = safe - mins * 60;
-  return `${mins}:${secs.toFixed(2).padStart(5, '0')}`;
+function formatTime(value) {
+  const t = Math.max(0, Number(value) || 0);
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  const cs = Math.floor((t % 1) * 100);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
+
+function showToast(message) {
+  const toast = $('toast');
+  toast.textContent = message;
+  toast.classList.add('is-visible');
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
+}
+
+function updateStageUnit() {
+  const unit = stage.clientWidth / 1080;
+  stage.style.setProperty('--stage-unit', `${unit}px`);
+  applyVisualState();
+}
+
+function animatedScaleAt(t) {
+  return Math.max(0.1, (state.scale / 100) * (1 - 0.02 * Math.max(0, t)));
+}
+
+function applyVisualState(time = bgVideo.currentTime || 0) {
+  object.style.left = `${state.x}%`;
+  object.style.top = `${state.y}%`;
+  object.style.width = `${(state.width / 1080) * 100}%`;
+  object.style.transform = `translate(-50%, -50%) scale(${animatedScaleAt(time)})`;
+
+  const unit = stage.clientWidth / 1080;
+  editableText.style.fontSize = `${state.fontSize * unit}px`;
+  editableText.style.color = state.color;
+  editableText.style.letterSpacing = `${state.tracking * unit}px`;
+  editableText.style.lineHeight = `${state.lineHeight / 100}`;
+  editableText.style.textAlign = state.align;
+
+  $('xField').value = Number(state.x.toFixed(1));
+  $('yField').value = Number(state.y.toFixed(1));
+  $('widthField').value = Math.round(state.width);
+  $('scaleField').value = Math.round(state.scale);
 }
 
 function setMode(mode) {
   state.mode = mode;
   const text = mode === 'text';
-  els.textModeBtn.classList.toggle('is-active', text);
-  els.mediaModeBtn.classList.toggle('is-active', !text);
-  els.textControls.classList.toggle('is-hidden', !text);
-  els.mediaControls.classList.toggle('is-hidden', text);
-  els.previewText.classList.toggle('is-hidden', !text);
-  els.previewImage.classList.toggle('is-hidden', text || state.mediaKind !== 'image');
-  els.previewMediaVideo.classList.toggle('is-hidden', text || state.mediaKind !== 'video');
-  renderPreviewTransform();
+  $('textMode').classList.toggle('is-active', text);
+  $('mediaMode').classList.toggle('is-active', !text);
+  $('textInspector').classList.toggle('is-hidden', !text);
+  $('mediaInspector').classList.toggle('is-hidden', text);
+  editableText.classList.toggle('is-hidden', !text);
+  if (!text) exitTextEdit();
+  updateMediaVisibility();
+  object.dataset.mode = mode;
+  selectionTag.textContent = text ? 'TEXT' : 'MEDIA';
 }
 
-function syncPreviewText() {
-  els.previewText.innerHTML = els.richTextEditor.innerHTML;
-  renderPreviewTransform();
+function updateMediaVisibility() {
+  const show = state.mode === 'media';
+  mediaImage.classList.toggle('is-hidden', !(show && state.mediaType === 'image'));
+  mediaVideo.classList.toggle('is-hidden', !(show && state.mediaType === 'video'));
 }
 
-function saveEditorSelection() {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) return;
-  const range = selection.getRangeAt(0);
-  if (els.richTextEditor.contains(range.commonAncestorContainer)) {
-    state.savedRange = range.cloneRange();
+function enterTextEdit() {
+  if (state.mode !== 'text') return;
+  state.editing = true;
+  object.classList.add('is-editing');
+  editableText.contentEditable = 'true';
+  editableText.focus({ preventScroll: true });
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount === 0) {
+    const range = document.createRange();
+    range.selectNodeContents(editableText);
+    range.collapse(false);
+    sel.addRange(range);
   }
 }
 
-function restoreEditorSelection() {
-  if (!state.savedRange) return false;
-  const selection = window.getSelection();
-  selection.removeAllRanges();
-  selection.addRange(state.savedRange);
+function exitTextEdit() {
+  state.editing = false;
+  object.classList.remove('is-editing');
+  editableText.contentEditable = 'false';
+  window.getSelection()?.removeAllRanges();
+}
+
+function applyFontToSelection(fontKey) {
+  if (state.mode !== 'text') return;
+  if (!state.editing) enterTextEdit();
+  const family = FONT_NAMES[fontKey] || FONT_NAMES.EzerSemiBold;
+  editableText.focus({ preventScroll: true });
+  try {
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('fontName', false, family);
+  } catch (_) {}
+}
+
+function updateActiveFontFromSelection() {
+  const sel = window.getSelection();
+  if (!sel || !sel.anchorNode || !editableText.contains(sel.anchorNode)) return;
+  const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
+  if (!el) return;
+  const family = getComputedStyle(el).fontFamily.replace(/["']/g, '');
+  const key = Object.keys(FONT_NAMES).find((k) => family.includes(FONT_NAMES[k]));
+  if (key) $('fontSelect').value = key;
+}
+
+$('fontSelect').addEventListener('change', (e) => applyFontToSelection(e.target.value));
+document.addEventListener('selectionchange', updateActiveFontFromSelection);
+
+$('fontSize').addEventListener('input', (e) => {
+  state.fontSize = clamp(e.target.value, 16, 300);
+  applyVisualState();
+});
+$('tracking').addEventListener('input', (e) => {
+  state.tracking = clamp(e.target.value, -10, 80);
+  applyVisualState();
+});
+$('lineHeight').addEventListener('input', (e) => {
+  state.lineHeight = clamp(e.target.value, 70, 200);
+  applyVisualState();
+});
+
+function setColor(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  const normalized = raw.startsWith('#') ? raw : `#${raw}`;
+  if (!/^#[0-9A-F]{6}$/.test(normalized)) return false;
+  state.color = normalized;
+  $('colorPicker').value = normalized.toLowerCase();
+  $('colorHex').value = normalized;
+  applyVisualState();
   return true;
 }
+$('colorPicker').addEventListener('input', (e) => setColor(e.target.value));
+$('colorHex').addEventListener('input', (e) => {
+  if (/^#?[0-9a-fA-F]{6}$/.test(e.target.value)) setColor(e.target.value);
+});
+$('colorHex').addEventListener('blur', () => { if (!setColor($('colorHex').value)) $('colorHex').value = state.color; });
 
-function applyFontToSelection(fontFamily) {
-  els.richTextEditor.focus();
-  restoreEditorSelection();
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
-  document.execCommand('fontName', false, fontFamily);
-  saveEditorSelection();
-  syncPreviewText();
+for (const button of document.querySelectorAll('.align-button')) {
+  button.addEventListener('click', () => {
+    state.align = button.dataset.align;
+    document.querySelectorAll('.align-button').forEach((b) => b.classList.toggle('is-active', b === button));
+    applyVisualState();
+  });
 }
 
-function textTimelineScale(time) {
-  return Math.max(0.05, 1 - TEXT_SCALE_DOWN_PER_SECOND * Math.max(0, time || 0));
+$('xField').addEventListener('input', (e) => { state.x = clamp(e.target.value, -50, 150); applyVisualState(); });
+$('yField').addEventListener('input', (e) => { state.y = clamp(e.target.value, -50, 150); applyVisualState(); });
+$('widthField').addEventListener('input', (e) => { state.width = clamp(e.target.value, 100, 1080); applyVisualState(); });
+$('scaleField').addEventListener('input', (e) => { state.scale = clamp(e.target.value, 10, 300); applyVisualState(); });
+$('centerObject').addEventListener('click', () => { state.x = 50; state.y = 50; applyVisualState(); });
+$('editTextButton').addEventListener('click', enterTextEdit);
+$('textMode').addEventListener('click', () => setMode('text'));
+$('mediaMode').addEventListener('click', () => setMode('media'));
+
+editableText.addEventListener('input', () => {
+  if (!editableText.innerText.trim()) editableText.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
+});
+editableText.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.preventDefault(); exitTextEdit(); stage.focus(); }
+});
+editableText.addEventListener('blur', () => {
+  setTimeout(() => {
+    const active = document.activeElement;
+    if (active !== $('fontSelect') && !editableText.contains(active)) exitTextEdit();
+  }, 0);
+});
+
+// Direct canvas manipulation: drag object, resize text box width, scale from corners.
+let gesture = null;
+object.addEventListener('pointerdown', (e) => {
+  if (state.editing || e.target.closest('.resize-handle')) return;
+  if (e.button !== 0) return;
+  e.preventDefault();
+  gesture = { type: 'move', startX: e.clientX, startY: e.clientY, x: state.x, y: state.y };
+  window.addEventListener('pointermove', onGestureMove);
+  window.addEventListener('pointerup', endGesture, { once: true });
+});
+object.addEventListener('dblclick', (e) => {
+  if (state.mode === 'text' && !e.target.closest('.resize-handle')) { e.preventDefault(); enterTextEdit(); }
+});
+for (const handle of document.querySelectorAll('.resize-handle')) {
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    const rect = stage.getBoundingClientRect();
+    const centerX = rect.left + rect.width * state.x / 100;
+    const centerY = rect.top + rect.height * state.y / 100;
+    const type = handle.dataset.handle;
+    gesture = {
+      type,
+      startX: e.clientX,
+      startY: e.clientY,
+      width: state.width,
+      scale: state.scale,
+      centerX,
+      centerY,
+      distance: Math.max(1, Math.hypot(e.clientX - centerX, e.clientY - centerY)),
+    };
+    window.addEventListener('pointermove', onGestureMove);
+    window.addEventListener('pointerup', endGesture, { once: true });
+  });
 }
-
-function syncTransformInputs() {
-  if (document.activeElement !== els.xInput) els.xInput.value = (state.x * 100).toFixed(1).replace(/\.0$/, '');
-  if (document.activeElement !== els.yInput) els.yInput.value = (state.y * 100).toFixed(1).replace(/\.0$/, '');
-  if (document.activeElement !== els.scaleInput) els.scaleInput.value = Math.round(state.scale * 100);
-  els.scaleSlider.value = String(Math.round(state.scale * 100));
-  els.scaleOutput.textContent = `${Math.round(state.scale * 100)}%`;
-}
-
-function renderPreviewTransform() {
-  const time = state.currentTime || 0;
-  const timelineScale = state.mode === 'text' ? textTimelineScale(time) : 1;
-  const visualScale = state.scale * timelineScale;
-  els.middleLayer.style.left = `${state.x * 100}%`;
-  els.middleLayer.style.top = `${state.y * 100}%`;
-  els.middleLayer.style.transform = `translate(-50%, -50%) scale(${visualScale})`;
-  syncTransformInputs();
-
-  const previewScale = els.stage.clientWidth / WIDTH;
-  els.previewText.style.fontSize = `${state.fontSize * previewScale}px`;
-  els.previewText.style.lineHeight = String(state.lineHeight);
-  els.previewText.style.letterSpacing = `${state.tracking * previewScale}px`;
-  els.previewText.style.color = state.textColor;
-  els.previewText.style.maxWidth = `${WIDTH * 0.88 * previewScale}px`;
-
-  if (state.mediaKind === 'image' && els.previewImage.naturalWidth) {
-    setPreviewMediaBaseSize(els.previewImage.naturalWidth, els.previewImage.naturalHeight);
-  } else if (state.mediaKind === 'video' && els.previewMediaVideo.videoWidth) {
-    setPreviewMediaBaseSize(els.previewMediaVideo.videoWidth, els.previewMediaVideo.videoHeight);
+function onGestureMove(e) {
+  if (!gesture) return;
+  const rect = stage.getBoundingClientRect();
+  if (gesture.type === 'move') {
+    state.x = clamp(gesture.x + ((e.clientX - gesture.startX) / rect.width) * 100, -50, 150);
+    state.y = clamp(gesture.y + ((e.clientY - gesture.startY) / rect.height) * 100, -50, 150);
+  } else if (gesture.type.startsWith('width')) {
+    const dxCanvas = ((e.clientX - gesture.startX) / rect.width) * 1080;
+    const direction = gesture.type === 'width-right' ? 1 : -1;
+    state.width = clamp(gesture.width + direction * dxCanvas * 2 / Math.max(.1, state.scale / 100), 100, 1080);
+  } else if (gesture.type === 'scale') {
+    const d = Math.max(1, Math.hypot(e.clientX - gesture.centerX, e.clientY - gesture.centerY));
+    state.scale = clamp(gesture.scale * (d / gesture.distance), 10, 300);
   }
+  applyVisualState();
+}
+function endGesture() {
+  window.removeEventListener('pointermove', onGestureMove);
+  gesture = null;
 }
 
-function setPreviewMediaBaseSize(naturalW, naturalH) {
-  const stageW = els.stage.clientWidth;
-  const stageH = els.stage.clientHeight;
-  const maxW = stageW * 0.7;
-  const maxH = stageH * 0.55;
-  const fit = Math.min(maxW / naturalW, maxH / naturalH);
-  const target = state.mediaKind === 'image' ? els.previewImage : els.previewMediaVideo;
-  target.style.width = `${naturalW * fit}px`;
-  target.style.height = `${naturalH * fit}px`;
-}
+stage.addEventListener('pointerdown', (e) => {
+  if (e.target === stage || e.target.classList.contains('stage-video')) object.classList.add('is-selected');
+});
 
-function centerLayer() {
-  state.x = 0.5;
-  state.y = 0.5;
-  renderPreviewTransform();
-}
-
-function updateTime(time, syncVideos = false) {
-  const duration = state.duration || 0;
-  state.currentTime = Math.max(0, Math.min(time, duration || time));
-  els.timeline.value = String(state.currentTime);
-  els.currentTimeLabel.textContent = formatTime(state.currentTime);
-  renderPreviewTransform();
-
-  if (syncVideos && state.templateReady) {
-    const t = Math.min(state.currentTime, Math.max(0, state.duration - 0.001));
-    if (Math.abs(els.bgVideo.currentTime - t) > 0.03) els.bgVideo.currentTime = t;
-    if (Math.abs(els.fgVideo.currentTime - t) > 0.03) els.fgVideo.currentTime = t;
-    syncMiddleMediaTime(t);
-  }
-}
-
-function syncMiddleMediaTime(t) {
-  if (state.mode !== 'media' || state.mediaKind !== 'video' || !Number.isFinite(els.previewMediaVideo.duration)) return;
-  const mediaDuration = els.previewMediaVideo.duration;
-  if (mediaDuration <= 0) return;
-  const mediaT = Math.min(t, Math.max(0, mediaDuration - 0.001));
-  if (Math.abs(els.previewMediaVideo.currentTime - mediaT) > 0.08) {
-    els.previewMediaVideo.currentTime = mediaT;
-  }
-  if (t >= mediaDuration) els.previewMediaVideo.pause();
-}
-
-async function togglePlayback() {
-  if (!state.templateReady) return;
-  if (state.isPlaying) {
-    pausePlayback();
-    return;
-  }
-  if (state.currentTime >= state.duration - 0.02) updateTime(0, true);
-  state.isPlaying = true;
-  els.playIcon.textContent = 'Ⅱ';
-  els.playBtn.setAttribute('aria-label', 'Pause preview');
-  await syncPlayStart();
-  tickPlayback();
-}
-
-async function syncPlayStart() {
-  const t = state.currentTime;
-  els.bgVideo.currentTime = t;
-  els.fgVideo.currentTime = t;
-  syncMiddleMediaTime(t);
-  const promises = [els.bgVideo.play(), els.fgVideo.play()];
-  if (state.mode === 'media' && state.mediaKind === 'video' && t < els.previewMediaVideo.duration) {
-    promises.push(els.previewMediaVideo.play());
-  }
-  await Promise.allSettled(promises);
-}
-
-function pausePlayback() {
-  state.isPlaying = false;
-  cancelAnimationFrame(state.raf);
-  els.bgVideo.pause();
-  els.fgVideo.pause();
-  els.previewMediaVideo.pause();
-  els.playIcon.textContent = '▶';
-  els.playBtn.setAttribute('aria-label', 'Play preview');
-  updateTime(els.bgVideo.currentTime || state.currentTime);
-}
-
-function tickPlayback() {
-  if (!state.isPlaying) return;
-  const t = els.bgVideo.currentTime;
-  updateTime(t);
-  if (state.mode === 'media' && state.mediaKind === 'video') syncMiddleMediaTime(t);
-  if (t >= state.duration - 0.01 || els.bgVideo.ended) {
-    pausePlayback();
-    updateTime(state.duration);
-    return;
-  }
-  state.raf = requestAnimationFrame(tickPlayback);
-}
+// Media upload / drop.
+const mediaInput = $('mediaInput');
+const uploadDrop = $('uploadDrop');
+mediaInput.addEventListener('change', () => mediaInput.files?.[0] && loadMedia(mediaInput.files[0]));
+['dragenter','dragover'].forEach((name) => uploadDrop.addEventListener(name, (e) => { e.preventDefault(); uploadDrop.classList.add('is-over'); }));
+['dragleave','drop'].forEach((name) => uploadDrop.addEventListener(name, (e) => { e.preventDefault(); uploadDrop.classList.remove('is-over'); }));
+uploadDrop.addEventListener('drop', (e) => { const file = e.dataTransfer.files?.[0]; if (file) loadMedia(file); });
+$('removeMedia').addEventListener('click', clearMedia);
 
 function clearMedia() {
-  els.previewMediaVideo.pause();
   if (state.mediaUrl) URL.revokeObjectURL(state.mediaUrl);
-  state.mediaFile = null;
-  state.mediaKind = null;
-  state.mediaUrl = null;
-  els.mediaInput.value = '';
-  els.previewImage.removeAttribute('src');
-  els.previewMediaVideo.removeAttribute('src');
-  els.previewImage.classList.add('is-hidden');
-  els.previewMediaVideo.classList.add('is-hidden');
-  els.removeMediaBtn.classList.add('is-hidden');
-  els.dropLabel.textContent = 'Choose a file';
+  state.mediaFile = null; state.mediaType = null; state.mediaUrl = null; state.mediaRatio = 1;
+  mediaImage.removeAttribute('src'); mediaVideo.removeAttribute('src');
+  $('uploadLabel').textContent = 'Choose image or video';
+  $('removeMedia').classList.add('is-hidden');
+  updateMediaVisibility();
 }
-
-function inferMediaKind(file) {
-  if (file.type.startsWith('image/')) return 'image';
-  if (file.type.startsWith('video/')) return 'video';
-  const ext = file.name.split('.').pop()?.toLowerCase();
-  if (['jpg','jpeg','png','webp','gif','avif','bmp','svg'].includes(ext)) return 'image';
-  if (['mp4','mov','m4v','webm','mkv','avi','mpeg','mpg'].includes(ext)) return 'video';
-  return null;
-}
-
-function loadMediaFile(file) {
+function loadMedia(file) {
   clearMedia();
-  const kind = inferMediaKind(file);
-  if (!kind) {
-    els.dropLabel.textContent = 'Unsupported file type';
-    return;
-  }
+  const isImage = file.type.startsWith('image/');
+  const isVideo = file.type.startsWith('video/') || /\.(mov|mkv|webm|mp4|m4v|avi)$/i.test(file.name);
+  if (!isImage && !isVideo) { showToast('That file type is not supported.'); return; }
   state.mediaFile = file;
-  state.mediaKind = kind;
+  state.mediaType = isImage ? 'image' : 'video';
   state.mediaUrl = URL.createObjectURL(file);
-  els.dropLabel.textContent = file.name;
-  els.removeMediaBtn.classList.remove('is-hidden');
-
-  if (kind === 'image') {
-    els.previewImage.src = state.mediaUrl;
-    els.previewImage.onload = () => {
-      setPreviewMediaBaseSize(els.previewImage.naturalWidth, els.previewImage.naturalHeight);
-      if (state.mode === 'media') els.previewImage.classList.remove('is-hidden');
-    };
+  $('uploadLabel').textContent = file.name;
+  $('removeMedia').classList.remove('is-hidden');
+  if (isImage) {
+    mediaImage.src = state.mediaUrl;
+    mediaImage.onload = () => { state.mediaRatio = mediaImage.naturalWidth / mediaImage.naturalHeight || 1; updateMediaVisibility(); };
   } else {
-    els.previewMediaVideo.src = state.mediaUrl;
-    els.previewMediaVideo.onloadedmetadata = () => {
-      setPreviewMediaBaseSize(els.previewMediaVideo.videoWidth, els.previewMediaVideo.videoHeight);
-      syncMiddleMediaTime(state.currentTime);
-      if (state.mode === 'media') els.previewMediaVideo.classList.remove('is-hidden');
-    };
+    mediaVideo.src = state.mediaUrl;
+    mediaVideo.onloadedmetadata = () => { state.mediaRatio = mediaVideo.videoWidth / mediaVideo.videoHeight || 1; updateMediaVisibility(); };
   }
-  renderPreviewTransform();
+  setMode('media');
 }
 
-async function fetchAsset(path) {
-  const response = await fetch(path, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`${path} returned ${response.status}`);
-  return response.blob();
-}
-
-async function loadTemplate() {
-  els.assetStatus.dataset.state = 'loading';
-  els.assetStatus.textContent = 'Loading template…';
+// Template preview.
+async function initTemplate() {
+  bgVideo.src = './assets/bg.webm';
+  fgVideo.src = './assets/fg.webm';
   try {
-    const [bgBlob, fgBlob] = await Promise.all([
-      fetchAsset('./assets/bg.webm'),
-      fetchAsset('./assets/fg.webm'),
-    ]);
-    els.bgVideo.src = URL.createObjectURL(bgBlob);
-    els.fgVideo.src = URL.createObjectURL(fgBlob);
-
-    await Promise.all([
-      new Promise((resolve, reject) => {
-        els.bgVideo.onloadedmetadata = resolve;
-        els.bgVideo.onerror = reject;
-      }),
-      new Promise((resolve, reject) => {
-        els.fgVideo.onloadedmetadata = resolve;
-        els.fgVideo.onerror = reject;
-      }),
-    ]);
-
-    state.duration = els.bgVideo.duration;
-    if (!Number.isFinite(state.duration) || state.duration <= 0) throw new Error('Invalid background duration');
-    if (Math.abs(els.fgVideo.duration - state.duration) > 0.05) {
-      console.warn('Foreground and background durations differ.', els.fgVideo.duration, state.duration);
-    }
-
-    state.templateReady = true;
-    els.stagePlaceholder.classList.add('is-hidden');
-    els.timeline.max = String(state.duration);
-    els.timeline.disabled = false;
-    els.playBtn.disabled = false;
-    els.exportBtn.disabled = false;
-    els.durationLabel.textContent = formatTime(state.duration);
-    els.assetStatus.dataset.state = 'ready';
-    els.assetStatus.textContent = `${formatTime(state.duration)} template ready`;
-    updateTime(0, true);
-  } catch (error) {
-    console.warn(error);
+    await Promise.all([waitForMetadata(bgVideo), waitForMetadata(fgVideo)]);
+    state.duration = bgVideo.duration;
+    state.templateReady = Number.isFinite(state.duration) && state.duration > 0;
+    if (!state.templateReady) throw new Error('Invalid duration');
+    $('missingAssets').classList.add('is-hidden');
+    $('timeline').max = state.duration;
+    $('timeline').disabled = false;
+    $('playPause').disabled = false;
+    $('exportButton').disabled = false;
+    $('timeTotal').textContent = formatTime(state.duration);
+    $('templateState').dataset.state = 'ready';
+    $('templateStateText').textContent = 'Template ready';
+    fgVideo.muted = true;
+    syncAt(0);
+  } catch (_) {
     state.templateReady = false;
-    els.assetStatus.dataset.state = 'error';
-    els.assetStatus.textContent = 'Template videos missing';
-    els.exportBtn.disabled = true;
+    $('templateState').dataset.state = 'error';
+    $('templateStateText').textContent = 'Template missing';
   }
 }
-
-function createInput(blob) {
-  return new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
-}
-
-function flattenRichText(root) {
-  const chars = [];
-  const walk = (node, inheritedFont = 'EzerSemiBold') => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      for (const char of [...node.nodeValue]) chars.push({ char, font: inheritedFont });
-      return;
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
-    const element = node;
-    if (element.tagName === 'BR') {
-      chars.push({ char: '\n', font: inheritedFont });
-      return;
-    }
-    const font = knownFontFromCss(getComputedStyle(element).fontFamily || inheritedFont);
-    const isBlock = ['DIV', 'P'].includes(element.tagName);
-    if (isBlock && chars.length && chars.at(-1).char !== '\n') chars.push({ char: '\n', font });
-    for (const child of element.childNodes) walk(child, font);
-    if (isBlock && chars.length && chars.at(-1).char !== '\n') chars.push({ char: '\n', font });
-  };
-  for (const child of root.childNodes) walk(child, 'EzerSemiBold');
-  while (chars.length && chars.at(-1).char === '\n') chars.pop();
-  return chars;
-}
-
-function drawRichText(ctx, chars, x, y, scale) {
-  const lines = [[]];
-  for (const item of chars) {
-    if (item.char === '\n') lines.push([]);
-    else lines.at(-1).push(item);
-  }
-  const fontSize = state.fontSize;
-  const tracking = state.tracking;
-  const lineHeight = fontSize * state.lineHeight;
-  const totalHeight = Math.max(lineHeight, lines.length * lineHeight);
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = state.textColor;
-
-  lines.forEach((line, lineIndex) => {
-    const widths = line.map(({ char, font }) => {
-      ctx.font = `${font === 'GesturaBlackItalic' ? 'italic ' : ''}${fontSize}px "${font}"`;
-      return ctx.measureText(char).width;
-    });
-    const spacingWidth = Math.max(0, line.length - 1) * tracking;
-    const lineWidth = widths.reduce((sum, w) => sum + w, 0) + spacingWidth;
-    let cursorX = -lineWidth / 2;
-    const lineY = -totalHeight / 2 + lineHeight / 2 + lineIndex * lineHeight;
-    line.forEach(({ char, font }, index) => {
-      ctx.font = `${font === 'GesturaBlackItalic' ? 'italic ' : ''}${fontSize}px "${font}"`;
-      ctx.fillText(char, cursorX, lineY);
-      cursorX += widths[index] + (index < line.length - 1 ? tracking : 0);
-    });
+function waitForMetadata(video) {
+  return new Promise((resolve, reject) => {
+    if (video.readyState >= 1 && Number.isFinite(video.duration)) return resolve();
+    const ok = () => { cleanup(); resolve(); };
+    const fail = () => { cleanup(); reject(new Error('video load failed')); };
+    const cleanup = () => { video.removeEventListener('loadedmetadata', ok); video.removeEventListener('error', fail); };
+    video.addEventListener('loadedmetadata', ok, { once: true });
+    video.addEventListener('error', fail, { once: true });
   });
+}
+
+function setVideoTime(video, t) {
+  if (!video.src || !Number.isFinite(video.duration)) return;
+  video.currentTime = Math.min(Math.max(0, t), Math.max(0, video.duration - .001));
+}
+function syncAt(t) {
+  setVideoTime(bgVideo, t);
+  setVideoTime(fgVideo, t);
+  if (state.mediaType === 'video') setVideoTime(mediaVideo, t % Math.max(.001, mediaVideo.duration || state.duration));
+  $('timeline').value = t;
+  $('timeNow').textContent = formatTime(t);
+  applyVisualState(t);
+}
+
+$('timeline').addEventListener('input', (e) => {
+  pausePreview();
+  syncAt(Number(e.target.value));
+});
+$('playPause').addEventListener('click', () => bgVideo.paused ? playPreview() : pausePreview());
+
+async function playPreview() {
+  if (!state.templateReady) return;
+  if (bgVideo.currentTime >= state.duration - .02) syncAt(0);
+  setVideoTime(fgVideo, bgVideo.currentTime);
+  if (state.mediaType === 'video') setVideoTime(mediaVideo, bgVideo.currentTime % Math.max(.001, mediaVideo.duration || state.duration));
+  try {
+    await bgVideo.play();
+    fgVideo.play().catch(() => {});
+    if (state.mode === 'media' && state.mediaType === 'video') mediaVideo.play().catch(() => {});
+    $('playGlyph').innerHTML = '<path d="M6.5 5h2.5v10H6.5zM11 5h2.5v10H11z"/>';
+    tickPreview();
+  } catch (_) { showToast('Playback was blocked by the browser.'); }
+}
+function pausePreview() {
+  bgVideo.pause(); fgVideo.pause(); mediaVideo.pause();
+  cancelAnimationFrame(state.raf);
+  $('playGlyph').innerHTML = '<path d="m7 5 8 5-8 5z"/>';
+}
+function tickPreview() {
+  if (bgVideo.paused) return;
+  const t = bgVideo.currentTime;
+  $('timeline').value = Math.min(t, state.duration);
+  $('timeNow').textContent = formatTime(t);
+  if (Math.abs(fgVideo.currentTime - t) > .08) setVideoTime(fgVideo, t);
+  if (state.mode === 'media' && state.mediaType === 'video' && mediaVideo.duration) {
+    const mt = t % mediaVideo.duration;
+    if (Math.abs(mediaVideo.currentTime - mt) > .1) setVideoTime(mediaVideo, mt);
+  }
+  applyVisualState(t);
+  if (t >= state.duration - .015) { pausePreview(); syncAt(0); return; }
+  state.raf = requestAnimationFrame(tickPreview);
+}
+
+// Rich text extraction for canvas rendering.
+function fontKeyForElement(el) {
+  const family = getComputedStyle(el).fontFamily.replace(/["']/g, '');
+  return Object.keys(FONT_NAMES).find((k) => family.includes(FONT_NAMES[k])) || 'EzerSemiBold';
+}
+function extractStyledChars() {
+  const chars = [];
+  const walk = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const key = fontKeyForElement(node.parentElement || editableText);
+      for (const ch of node.nodeValue || '') chars.push({ ch, font: key });
+      return;
+    }
+    if (node.nodeName === 'BR') { chars.push({ ch: '\n', font: 'EzerSemiBold' }); return; }
+    const isBlock = node !== editableText && /^(DIV|P)$/.test(node.nodeName);
+    if (isBlock && chars.length && chars[chars.length - 1].ch !== '\n') chars.push({ ch: '\n', font: 'EzerSemiBold' });
+    for (const child of node.childNodes) walk(child);
+  };
+  walk(editableText);
+  while (chars.length && chars[chars.length - 1].ch === '\n') chars.pop();
+  return chars.length ? chars : [{ ch: ' ', font: 'EzerSemiBold' }];
+}
+
+function fontString(key, px) { return `${px}px "${FONT_NAMES[key] || FONT_NAMES.EzerSemiBold}"`; }
+function charWidth(ctx, item, fontSize) {
+  ctx.font = fontString(item.font, fontSize);
+  return ctx.measureText(item.ch).width + state.tracking;
+}
+function layoutText(ctx, chars) {
+  const maxWidth = state.width;
+  const lines = [];
+  let line = [], width = 0;
+  const commit = () => { lines.push({ chars: line, width: Math.max(0, width - (line.length ? state.tracking : 0)) }); line = []; width = 0; };
+  for (const item of chars) {
+    if (item.ch === '\n') { commit(); continue; }
+    const cw = charWidth(ctx, item, state.fontSize);
+    if (line.length && width + cw > maxWidth) {
+      let split = -1;
+      for (let i = line.length - 1; i >= 0; i--) { if (/\s/.test(line[i].ch)) { split = i; break; } }
+      if (split > 0) {
+        const carry = line.splice(split + 1);
+        line.pop();
+        width = line.reduce((sum, c) => sum + charWidth(ctx, c, state.fontSize), 0);
+        commit();
+        line = carry;
+        width = line.reduce((sum, c) => sum + charWidth(ctx, c, state.fontSize), 0);
+      } else commit();
+    }
+    line.push(item); width += cw;
+  }
+  commit();
+  return lines;
+}
+function drawTextLayer(ctx, time) {
+  const chars = extractStyledChars();
+  const lines = layoutText(ctx, chars);
+  const linePx = state.fontSize * state.lineHeight / 100;
+  const totalHeight = linePx * lines.length;
+  const s = animatedScaleAt(time);
+  ctx.save();
+  ctx.translate(1080 * state.x / 100, 1920 * state.y / 100);
+  ctx.scale(s, s);
+  ctx.fillStyle = state.color;
+  ctx.textBaseline = 'alphabetic';
+  let y = -totalHeight / 2 + state.fontSize;
+  for (const line of lines) {
+    let x;
+    if (state.align === 'left') x = -state.width / 2;
+    else if (state.align === 'right') x = state.width / 2 - line.width;
+    else x = -line.width / 2;
+    for (const item of line.chars) {
+      ctx.font = fontString(item.font, state.fontSize);
+      ctx.fillText(item.ch, x, y);
+      x += ctx.measureText(item.ch).width + state.tracking;
+    }
+    y += linePx;
+  }
+  ctx.restore();
+}
+function drawMediaLayer(ctx, source, time) {
+  if (!source) return;
+  const ratio = state.mediaRatio || (source.width && source.height ? source.width / source.height : 1);
+  const w = state.width;
+  const h = w / Math.max(.01, ratio);
+  const s = animatedScaleAt(time);
+  ctx.save();
+  ctx.translate(1080 * state.x / 100, 1920 * state.y / 100);
+  ctx.scale(s, s);
+  ctx.drawImage(source, -w / 2, -h / 2, w, h);
   ctx.restore();
 }
 
-function containSize(srcW, srcH, maxW, maxH) {
-  const factor = Math.min(maxW / srcW, maxH / srcH);
-  return { w: srcW * factor, h: srcH * factor };
+async function imageBitmapFromFile(file) {
+  if ('createImageBitmap' in window) return createImageBitmap(file);
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+  URL.revokeObjectURL(url);
+  return img;
 }
 
-function drawMiddleMedia(ctx, source, naturalW, naturalH) {
-  const base = containSize(naturalW, naturalH, WIDTH * 0.7, HEIGHT * 0.55);
-  const w = base.w * state.scale;
-  const h = base.h * state.scale;
-  const x = state.x * WIDTH - w / 2;
-  const y = state.y * HEIGHT - h / 2;
-  ctx.drawImage(source, x, y, w, h);
-}
-
-function cropAudioBuffer(buffer, seconds) {
-  const frames = Math.max(0, Math.min(buffer.length, Math.round(seconds * buffer.sampleRate)));
-  if (frames >= buffer.length) return buffer;
-  const trimmed = new AudioBuffer({
-    length: frames,
-    sampleRate: buffer.sampleRate,
-    numberOfChannels: buffer.numberOfChannels,
-  });
-  for (let ch = 0; ch < buffer.numberOfChannels; ch += 1) {
-    trimmed.copyToChannel(buffer.getChannelData(ch).subarray(0, frames), ch);
-  }
-  return trimmed;
-}
-
-function setExportProgress(progress, label) {
-  const value = Math.max(0, Math.min(1, progress));
-  const pct = Math.round(value * 100);
-  els.exportProgress.style.width = `${pct}%`;
-  els.exportPercent.textContent = `${pct}%`;
-  els.exportStatus.textContent = label;
-}
-
+$('exportButton').addEventListener('click', exportVideo);
 async function exportVideo() {
-  if (!state.templateReady || state.exporting) return;
-  state.exporting = true;
-  pausePlayback();
-  els.exportBtn.disabled = true;
-  els.exportProgressWrap.classList.remove('is-hidden');
-  setExportProgress(0, 'Loading template…');
+  if (!state.templateReady) return showToast('Add bg.webm and fg.webm first.');
+  if (!('VideoEncoder' in window)) return showToast('Use current Chrome or Edge for MP4 export.');
+  pausePreview();
+  exitTextEdit();
+  $('exportOverlay').classList.remove('is-hidden');
+  $('progressFill').style.width = '0%';
+  $('progressPercent').textContent = '0%';
+  $('exportDetail').textContent = 'Loading renderer…';
 
   try {
     await document.fonts.ready;
-    const [bgBlob, fgBlob] = await Promise.all([
-      fetchAsset('./assets/bg.webm'),
-      fetchAsset('./assets/fg.webm'),
-    ]);
+    const mb = await import('https://cdn.jsdelivr.net/npm/mediabunny@1.55.4/+esm');
+    const {
+      Input, ALL_FORMATS, BlobSource, CanvasSink, AudioBufferSink,
+      Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality,
+    } = mb;
 
-    const bgInput = createInput(bgBlob);
-    const fgInput = createInput(fgBlob);
-    const [bgTrack, fgTrack] = await Promise.all([
-      bgInput.getPrimaryVideoTrack(),
-      fgInput.getPrimaryVideoTrack(),
-    ]);
-    if (!bgTrack || !fgTrack) throw new Error('Template video track missing.');
-    if (!(await bgTrack.canDecode())) throw new Error('This browser cannot decode bg.webm.');
-    if (!(await fgTrack.canDecode())) throw new Error('This browser cannot decode fg.webm.');
+    $('exportDetail').textContent = 'Reading template…';
+    const [bgResponse, fgResponse] = await Promise.all([fetch('./assets/bg.webm'), fetch('./assets/fg.webm')]);
+    if (!bgResponse.ok || !fgResponse.ok) throw new Error('Template videos could not be loaded.');
+    const [bgBlob, fgBlob] = await Promise.all([bgResponse.blob(), fgResponse.blob()]);
+
+    const bgInput = new Input({ formats: ALL_FORMATS, source: new BlobSource(bgBlob) });
+    const fgInput = new Input({ formats: ALL_FORMATS, source: new BlobSource(fgBlob) });
+    const bgTrack = await bgInput.getPrimaryVideoTrack();
+    const fgTrack = await fgInput.getPrimaryVideoTrack();
+    if (!bgTrack || !fgTrack) throw new Error('Both template files need a video track.');
 
     const duration = await bgInput.computeDuration();
-    if (!Number.isFinite(duration) || duration <= 0) throw new Error('Could not determine template duration.');
+    const fps = 30;
+    const frameCount = Math.ceil(duration * fps);
+    const times = Array.from({ length: frameCount }, (_, i) => i / fps);
+    const bgSink = new CanvasSink(bgTrack);
+    const fgSink = new CanvasSink(fgTrack);
+    const bgIterator = bgSink.canvasesAtTimestamps(times)[Symbol.asyncIterator]();
+    const fgIterator = fgSink.canvasesAtTimestamps(times)[Symbol.asyncIterator]();
 
-    const videoQuality = new Quality({ bitrate: VIDEO_BITRATE });
-    if (!(await canEncodeVideo('avc', { width: WIDTH, height: HEIGHT, quality: videoQuality }))) {
-      throw new Error('H.264 export is not supported in this browser. Use current Chrome or Edge on desktop.');
-    }
-    if (!(await canEncodeAudio('aac'))) registerAacEncoder();
-
-    const renderCanvas = document.createElement('canvas');
-    renderCanvas.width = WIDTH;
-    renderCanvas.height = HEIGHT;
-    const ctx = renderCanvas.getContext('2d', { alpha: false, desynchronized: true });
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    const output = new Output({
-      format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
-      target: new BufferTarget(),
-    });
-    const videoSource = new CanvasSource(renderCanvas, {
-      codec: 'avc',
-      quality: videoQuality,
-      keyFrameInterval: 2,
-    });
-    output.addVideoTrack(videoSource, { frameRate: FPS });
-
-    const bgAudioTrack = await bgInput.getPrimaryAudioTrack();
-    let audioSource = null;
-    let audioSink = null;
-    if (bgAudioTrack && await bgAudioTrack.canDecode()) {
-      audioSource = new AudioBufferSource({
-        codec: 'aac',
-        quality: new Quality({ bitrate: AUDIO_BITRATE }),
-      });
-      output.addAudioTrack(audioSource);
-      audioSink = new AudioBufferSink(bgAudioTrack);
-    }
-
-    const bgSink = new CanvasSink(bgTrack, { width: WIDTH, height: HEIGHT, fit: 'fill', poolSize: 2 });
-    const fgSink = new CanvasSink(fgTrack, { width: WIDTH, height: HEIGHT, fit: 'fill', alpha: true, poolSize: 2 });
-
-    let middleImageBitmap = null;
-    let middleVideoSink = null;
-    let middleVideoTrack = null;
-    let middleDuration = 0;
-    let middleInput = null;
-
+    let mediaInputExport = null, mediaIterator = null, mediaBitmap = null;
     if (state.mode === 'media' && state.mediaFile) {
-      if (state.mediaKind === 'image') {
-        middleImageBitmap = await createImageBitmap(state.mediaFile);
-      } else if (state.mediaKind === 'video') {
-        middleInput = createInput(state.mediaFile);
-        middleVideoTrack = await middleInput.getPrimaryVideoTrack();
-        if (!middleVideoTrack || !(await middleVideoTrack.canDecode())) {
-          throw new Error('The uploaded video codec cannot be decoded in this browser.');
-        }
-        middleDuration = await middleVideoTrack.computeDuration();
-        middleVideoSink = new CanvasSink(middleVideoTrack, { alpha: true, poolSize: 2 });
+      if (state.mediaType === 'image') {
+        mediaBitmap = await imageBitmapFromFile(state.mediaFile);
+        state.mediaRatio = (mediaBitmap.width || 1) / (mediaBitmap.height || 1);
+      } else {
+        mediaInputExport = new Input({ formats: ALL_FORMATS, source: new BlobSource(state.mediaFile) });
+        const mediaTrack = await mediaInputExport.getPrimaryVideoTrack();
+        if (!mediaTrack) throw new Error('The uploaded file does not contain a readable video track.');
+        const mw = await mediaTrack.getDisplayWidth();
+        const mh = await mediaTrack.getDisplayHeight();
+        if (mw && mh) state.mediaRatio = mw / mh;
+        const mediaDuration = await mediaTrack.computeDuration();
+        const mediaSink = new CanvasSink(mediaTrack);
+        const mediaTimes = times.map((t) => t % Math.max(1 / fps, mediaDuration));
+        // Looping timestamps are not monotonic; getCanvas is safer for the occasional uploaded clip.
+        mediaIterator = { next: async (i) => ({ value: await mediaSink.getCanvas(mediaTimes[i]), done: false }) };
       }
     }
 
-    const textChars = flattenRichText(els.richTextEditor);
-    const frameCount = Math.max(1, Math.ceil(duration * FPS - 1e-7));
-    const timestamps = Array.from({ length: frameCount }, (_, i) => i / FPS);
-    const middleTimestamps = middleVideoSink
-      ? timestamps.map((t) => Math.min(t, Math.max(0, middleDuration - 0.000001)))
-      : null;
+    const renderCanvas = document.createElement('canvas');
+    renderCanvas.width = 1080; renderCanvas.height = 1920;
+    const ctx = renderCanvas.getContext('2d', { alpha: false, desynchronized: true });
 
-    const bgIterator = bgSink.canvasesAtTimestamps(timestamps);
-    const fgIterator = fgSink.canvasesAtTimestamps(timestamps);
-    const middleIterator = middleVideoSink ? middleVideoSink.canvasesAtTimestamps(middleTimestamps) : null;
+    const target = new BufferTarget();
+    const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
+    const videoSource = new CanvasSource(renderCanvas, {
+      codec: 'avc',
+      quality: new Quality({ bitrate: 20_000_000 }),
+      keyFrameInterval: 2,
+    });
+    output.addVideoTrack(videoSource);
+
+    let audioSource = null, audioSink = null;
+    const audioTrack = await bgInput.getPrimaryAudioTrack();
+    if (audioTrack && 'AudioEncoder' in window) {
+      audioSource = new AudioBufferSource({ codec: 'aac', quality: new Quality({ bitrate: 256_000 }) });
+      output.addAudioTrack(audioSource);
+      audioSink = new AudioBufferSink(audioTrack);
+    }
 
     await output.start();
+    $('exportDetail').textContent = 'Rendering frames…';
 
     const audioPromise = (async () => {
       if (!audioSource || !audioSink) return;
-      let audioTime = 0;
-      for await (const wrapped of audioSink.buffers(0, duration)) {
-        if (audioTime >= duration) break;
-        const remaining = duration - audioTime;
-        const buffer = wrapped.buffer.duration > remaining
-          ? cropAudioBuffer(wrapped.buffer, remaining)
-          : wrapped.buffer;
-        if (buffer.length > 0) {
-          await audioSource.add(buffer);
-          audioTime += buffer.duration;
-        }
-      }
+      for await (const wrapped of audioSink.buffers(0, duration)) await audioSource.add(wrapped.buffer);
       audioSource.close();
     })();
 
-    setExportProgress(0.02, 'Rendering frames…');
+    for (let i = 0; i < frameCount; i++) {
+      const t = times[i];
+      const [bgResult, fgResult] = await Promise.all([bgIterator.next(), fgIterator.next()]);
+      const bgFrame = bgResult.value?.canvas;
+      const fgFrame = fgResult.value?.canvas;
+      if (!bgFrame || !fgFrame) throw new Error(`Could not decode frame ${i + 1}.`);
 
-    for (let i = 0; i < frameCount; i += 1) {
-      const tasks = [bgIterator.next(), fgIterator.next()];
-      if (middleIterator) tasks.push(middleIterator.next());
-      const results = await Promise.all(tasks);
-      const bgFrame = results[0].value;
-      const fgFrame = results[1].value;
-      const middleFrame = middleIterator ? results[2].value : null;
-      if (!bgFrame || !fgFrame) throw new Error(`Could not decode template frame ${i + 1}.`);
+      ctx.clearRect(0, 0, 1080, 1920);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 1080, 1920);
+      ctx.drawImage(bgFrame, 0, 0, 1080, 1920);
 
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      ctx.drawImage(bgFrame.canvas, 0, 0, WIDTH, HEIGHT);
-
-      const t = timestamps[i];
-      if (state.mode === 'text') {
-        const timelineScale = textTimelineScale(t);
-        drawRichText(ctx, textChars, state.x * WIDTH, state.y * HEIGHT, state.scale * timelineScale);
-      } else if (middleImageBitmap) {
-        drawMiddleMedia(ctx, middleImageBitmap, middleImageBitmap.width, middleImageBitmap.height);
-      } else if (middleFrame) {
-        drawMiddleMedia(ctx, middleFrame.canvas, middleFrame.canvas.width, middleFrame.canvas.height);
+      if (state.mode === 'text') drawTextLayer(ctx, t);
+      else if (state.mediaType === 'image' && mediaBitmap) drawMediaLayer(ctx, mediaBitmap, t);
+      else if (state.mediaType === 'video' && mediaIterator) {
+        const mediaResult = await mediaIterator.next(i);
+        if (mediaResult.value?.canvas) drawMediaLayer(ctx, mediaResult.value.canvas, t);
       }
 
-      ctx.drawImage(fgFrame.canvas, 0, 0, WIDTH, HEIGHT);
-      const frameDuration = i === frameCount - 1
-        ? Math.max(1 / 1000, duration - t)
-        : 1 / FPS;
-      await videoSource.add(t, frameDuration);
+      ctx.drawImage(fgFrame, 0, 0, 1080, 1920);
+      await videoSource.add(t, 1 / fps, i % (fps * 2) === 0 ? { keyFrame: true } : undefined);
 
-      if (i % 3 === 0 || i === frameCount - 1) {
-        setExportProgress(0.03 + 0.91 * ((i + 1) / frameCount), `Rendering frame ${i + 1} of ${frameCount}`);
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
+      const pct = Math.round(((i + 1) / frameCount) * 96);
+      $('progressFill').style.width = `${pct}%`;
+      $('progressPercent').textContent = `${pct}%`;
+      if (i % 8 === 0) await new Promise(requestAnimationFrame);
     }
-
     videoSource.close();
     await audioPromise;
-    setExportProgress(0.96, 'Finalizing MP4…');
+    $('exportDetail').textContent = 'Finalizing MP4…';
+    $('progressFill').style.width = '98%'; $('progressPercent').textContent = '98%';
     await output.finalize();
 
-    if (middleImageBitmap) middleImageBitmap.close();
-    const buffer = output.target.buffer;
-    if (!buffer) throw new Error('The MP4 encoder returned no output.');
-    const blob = new Blob([buffer], { type: 'video/mp4' });
+    const blob = new Blob([target.buffer], { type: 'video/mp4' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'toolbox-video.mp4';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    setExportProgress(1, 'Done');
+    a.href = url; a.download = 'toolbox-video.mp4';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    if (mediaBitmap?.close) mediaBitmap.close();
+
+    $('progressFill').style.width = '100%'; $('progressPercent').textContent = '100%';
+    $('exportDetail').textContent = 'Done';
+    setTimeout(() => $('exportOverlay').classList.add('is-hidden'), 650);
+    showToast('MP4 exported.');
   } catch (error) {
     console.error(error);
-    setExportProgress(0, error?.message || 'Export failed');
-    alert(`Export failed: ${error?.message || error}`);
-  } finally {
-    state.exporting = false;
-    els.exportBtn.disabled = !state.templateReady;
+    $('exportOverlay').classList.add('is-hidden');
+    showToast(error?.message || 'Export failed.');
   }
 }
 
-function bindDrag() {
-  let pointerId = null;
-  const updateFromEvent = (event) => {
-    const rect = els.stage.getBoundingClientRect();
-    state.x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    state.y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-    renderPreviewTransform();
-  };
-
-  els.middleLayer.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return;
-    pointerId = event.pointerId;
-    els.middleLayer.setPointerCapture(pointerId);
-    els.middleLayer.classList.add('is-dragging');
-    updateFromEvent(event);
-  });
-  els.middleLayer.addEventListener('pointermove', (event) => {
-    if (event.pointerId !== pointerId) return;
-    updateFromEvent(event);
-  });
-  const end = (event) => {
-    if (event.pointerId !== pointerId) return;
-    els.middleLayer.classList.remove('is-dragging');
-    try { els.middleLayer.releasePointerCapture(pointerId); } catch {}
-    pointerId = null;
-  };
-  els.middleLayer.addEventListener('pointerup', end);
-  els.middleLayer.addEventListener('pointercancel', end);
-}
-
-function bindEvents() {
-  els.textModeBtn.addEventListener('click', () => setMode('text'));
-  els.mediaModeBtn.addEventListener('click', () => setMode('media'));
-  els.richTextEditor.addEventListener('input', syncPreviewText);
-  els.richTextEditor.addEventListener('keyup', saveEditorSelection);
-  els.richTextEditor.addEventListener('mouseup', saveEditorSelection);
-  els.richTextEditor.addEventListener('focus', saveEditorSelection);
-  document.addEventListener('selectionchange', () => {
-    if (document.activeElement === els.richTextEditor) saveEditorSelection();
-  });
-  els.richTextEditor.addEventListener('paste', (event) => {
-    event.preventDefault();
-    const text = event.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, text);
-  });
-  els.fontSelect.addEventListener('mousedown', saveEditorSelection);
-  els.fontSelect.addEventListener('change', () => applyFontToSelection(els.fontSelect.value));
-  els.fontSizeInput.addEventListener('input', () => {
-    state.fontSize = Math.max(20, Math.min(260, Number(els.fontSizeInput.value) || DEFAULT_TEXT_SIZE));
-    renderPreviewTransform();
-  });
-  els.trackingInput.addEventListener('input', () => {
-    state.tracking = Math.max(-20, Math.min(80, Number(els.trackingInput.value) || 0));
-    renderPreviewTransform();
-  });
-  els.lineHeightInput.addEventListener('input', () => {
-    const value = Math.max(70, Math.min(200, Number(els.lineHeightInput.value) || 108));
-    state.lineHeight = value / 100;
-    renderPreviewTransform();
-  });
-  els.textColorInput.addEventListener('input', () => {
-    state.textColor = els.textColorInput.value;
-    els.textColorValue.textContent = state.textColor.toUpperCase();
-    renderPreviewTransform();
-  });
-
-  els.mediaInput.addEventListener('change', () => {
-    const file = els.mediaInput.files?.[0];
-    if (file) loadMediaFile(file);
-  });
-  ['dragenter', 'dragover'].forEach((type) => els.dropZone.addEventListener(type, (event) => {
-    event.preventDefault();
-    els.dropZone.classList.add('is-dragover');
-  }));
-  ['dragleave', 'drop'].forEach((type) => els.dropZone.addEventListener(type, (event) => {
-    event.preventDefault();
-    els.dropZone.classList.remove('is-dragover');
-  }));
-  els.dropZone.addEventListener('drop', (event) => {
-    const file = event.dataTransfer.files?.[0];
-    if (file) loadMediaFile(file);
-  });
-  els.removeMediaBtn.addEventListener('click', clearMedia);
-
-  els.scaleSlider.addEventListener('input', () => {
-    state.scale = Number(els.scaleSlider.value) / 100;
-    renderPreviewTransform();
-  });
-  els.scaleInput.addEventListener('input', () => {
-    const value = Math.max(20, Math.min(220, Number(els.scaleInput.value) || 100));
-    state.scale = value / 100;
-    renderPreviewTransform();
-  });
-  els.xInput.addEventListener('input', () => {
-    const value = Math.max(0, Math.min(100, Number(els.xInput.value) || 0));
-    state.x = value / 100;
-    renderPreviewTransform();
-  });
-  els.yInput.addEventListener('input', () => {
-    const value = Math.max(0, Math.min(100, Number(els.yInput.value) || 0));
-    state.y = value / 100;
-    renderPreviewTransform();
-  });
-  els.centerBtn.addEventListener('click', centerLayer);
-
-  els.playBtn.addEventListener('click', togglePlayback);
-  els.timeline.addEventListener('input', () => {
-    pausePlayback();
-    updateTime(Number(els.timeline.value), true);
-  });
-  els.bgVideo.addEventListener('ended', () => {
-    pausePlayback();
-    updateTime(state.duration);
-  });
-  els.exportBtn.addEventListener('click', exportVideo);
-  window.addEventListener('resize', renderPreviewTransform);
-  bindDrag();
-}
-
-async function init() {
-  bindEvents();
-  setMode('text');
-  syncPreviewText();
-  await document.fonts.ready;
-  renderPreviewTransform();
-  await loadTemplate();
-}
-
-init();
+new ResizeObserver(updateStageUnit).observe(stage);
+window.addEventListener('resize', updateStageUnit);
+setMode('text');
+setColor('#F3F3F3');
+applyVisualState(0);
+initTemplate();

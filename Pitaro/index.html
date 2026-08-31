@@ -2,140 +2,202 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f5f5f2" />
-  <title>Toolbox Video Maker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#f5f5f3" />
+  <title>Toolbox Composer</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="app">
+  <div class="app-shell">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">VIDEO TOOL</div>
-        <h1>Toolbox Maker</h1>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">T</div>
+        <div class="brand-copy">
+          <strong>Toolbox Composer</strong>
+          <span>Social video editor</span>
+        </div>
       </div>
-      <div id="assetStatus" class="status-pill" data-state="loading">Loading template…</div>
+
+      <div class="topbar-actions">
+        <div id="templateState" class="template-state" data-state="loading">
+          <span class="state-dot"></span>
+          <span id="templateStateText">Loading template</span>
+        </div>
+        <button id="exportButton" class="export-button" type="button" disabled>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9m0 0 3.5-3.5M10 12 6.5 8.5M4 14.5V17h12v-2.5"/></svg>
+          Export MP4
+        </button>
+      </div>
     </header>
 
-    <main class="workspace">
-      <section class="controls" aria-label="Editor controls">
-        <div class="section-block">
-          <div class="section-label">Content</div>
-          <div class="segmented" role="group" aria-label="Middle layer type">
-            <button id="textModeBtn" class="segmented-btn is-active" type="button">Text</button>
-            <button id="mediaModeBtn" class="segmented-btn" type="button">Photo / video</button>
-          </div>
-        </div>
-
-        <div id="textControls" class="section-block text-panel">
-          <div class="section-heading-row">
-            <label class="section-label" for="richTextEditor">Text</label>
-            <span class="micro-label">Select text to style font</span>
-          </div>
-          <div id="richTextEditor" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false"><span class="font-ezer-semibold">Meet your new </span><span class="font-gestura">Toolbox</span></div>
-
-          <div class="tool-panel" aria-label="Typography controls">
-            <div class="tool-row tool-row-main">
-              <label class="tool-control tool-font">
-                <span class="tool-label">Font</span>
-                <select id="fontSelect" aria-label="Font for selected text">
-                  <option value="EzerLight">Ezer Standard Light</option>
-                  <option value="EzerBook">Ezer Standard Book</option>
-                  <option value="EzerRegular">Ezer Standard Regular</option>
-                  <option value="EzerSemiBold" selected>Ezer Standard SemiBold</option>
-                  <option value="GesturaBlackItalic">Gestura Text Black Italic</option>
-                </select>
-              </label>
-              <label class="tool-control tool-number">
-                <span class="tool-label">Size</span>
-                <span class="number-shell"><input id="fontSizeInput" type="number" min="20" max="260" step="1" value="92" aria-label="Text size" /><span>px</span></span>
-              </label>
-            </div>
-            <div class="tool-row tool-row-secondary">
-              <label class="tool-control">
-                <span class="tool-label">Tracking</span>
-                <span class="number-shell"><input id="trackingInput" type="number" min="-20" max="80" step="1" value="0" aria-label="Letter spacing" /><span>px</span></span>
-              </label>
-              <label class="tool-control">
-                <span class="tool-label">Line</span>
-                <span class="number-shell"><input id="lineHeightInput" type="number" min="70" max="200" step="1" value="108" aria-label="Line height percent" /><span>%</span></span>
-              </label>
-              <label class="tool-control color-control">
-                <span class="tool-label">Color</span>
-                <span class="color-shell"><input id="textColorInput" type="color" value="#111111" aria-label="Text color" /><span id="textColorValue">#111111</span></span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div id="mediaControls" class="section-block is-hidden">
-          <label class="field-label" for="mediaInput">Photo or video</label>
-          <label id="dropZone" class="drop-zone" for="mediaInput">
-            <input id="mediaInput" type="file" accept="image/*,video/*,.mov,.mkv,.webm,.mp4,.m4v,.avi" />
-            <span class="drop-icon">＋</span>
-            <span id="dropLabel">Choose a file</span>
-            <small>Image or video. Kept local in your browser.</small>
-          </label>
-          <button id="removeMediaBtn" class="text-button is-hidden" type="button">Remove media</button>
-        </div>
-
-        <div class="section-block transform-panel">
-          <div class="section-heading-row">
-            <div class="section-label">Transform</div>
-            <button id="centerBtn" class="icon-text-button" type="button" title="Center layer" aria-label="Center layer">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12M5.5 4.5H3.5v2M10.5 4.5h2v2M5.5 11.5H3.5v-2M10.5 11.5h2v-2"/></svg>
-              Center
+    <main class="editor-layout">
+      <aside class="inspector" aria-label="Properties inspector">
+        <section class="inspector-section content-section">
+          <div class="section-title">Layer</div>
+          <div class="mode-switch" role="group" aria-label="Layer type">
+            <button id="textMode" class="mode-button is-active" type="button">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 4h10M10 4v12M7 16h6"/></svg>
+              Text
+            </button>
+            <button id="mediaMode" class="mode-button" type="button">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.5" y="4" width="13" height="12" rx="1.5"/><circle cx="8" cy="8" r="1.2"/><path d="m5.5 14 3-3 2 2 1.8-1.8 2.2 2.8"/></svg>
+              Media
             </button>
           </div>
-          <div class="transform-grid">
-            <label class="compact-field"><span>X</span><input id="xInput" type="number" min="0" max="100" step="0.1" value="50" /><small>%</small></label>
-            <label class="compact-field"><span>Y</span><input id="yInput" type="number" min="0" max="100" step="0.1" value="50" /><small>%</small></label>
-            <label class="compact-field"><span>S</span><input id="scaleInput" type="number" min="20" max="220" step="1" value="100" /><small>%</small></label>
+        </section>
+
+        <section id="textInspector" class="inspector-section">
+          <div class="section-heading">
+            <div class="section-title">Typography</div>
+            <button id="editTextButton" class="quiet-button" type="button">Edit text</button>
           </div>
-          <label class="range-field range-field-compact">
-            <span>Scale</span>
-            <output id="scaleOutput">100%</output>
-            <input id="scaleSlider" type="range" min="20" max="220" step="1" value="100" />
+
+          <div class="control-stack">
+            <label class="control-label" for="fontSelect">Font <span>selection</span></label>
+            <div class="select-shell">
+              <select id="fontSelect">
+                <option value="EzerLight">Ezer Standard · Light</option>
+                <option value="EzerBook">Ezer Standard · Book</option>
+                <option value="EzerRegular">Ezer Standard · Regular</option>
+                <option value="EzerSemiBold" selected>Ezer Standard · SemiBold</option>
+                <option value="Gestura">Gestura Text · Black Italic</option>
+              </select>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 6 3 3 3-3"/></svg>
+            </div>
+
+            <div class="split-row">
+              <label class="field-card">
+                <span class="field-prefix">T</span>
+                <input id="fontSize" type="number" min="16" max="300" step="1" value="92" aria-label="Font size" />
+                <small>px</small>
+              </label>
+              <label class="field-card color-card" title="Text color">
+                <input id="colorPicker" type="color" value="#f3f3f3" aria-label="Text color" />
+                <input id="colorHex" type="text" value="#F3F3F3" maxlength="7" spellcheck="false" aria-label="Text color hex" />
+              </label>
+            </div>
+
+            <div class="align-row" role="group" aria-label="Text alignment">
+              <button class="align-button" type="button" data-align="left" aria-label="Align left"><svg viewBox="0 0 18 18"><path d="M3 5h12M3 9h8M3 13h10"/></svg></button>
+              <button class="align-button is-active" type="button" data-align="center" aria-label="Align center"><svg viewBox="0 0 18 18"><path d="M3 5h12M5 9h8M4 13h10"/></svg></button>
+              <button class="align-button" type="button" data-align="right" aria-label="Align right"><svg viewBox="0 0 18 18"><path d="M3 5h12M7 9h8M5 13h10"/></svg></button>
+            </div>
+
+            <details class="advanced-panel">
+              <summary>Spacing</summary>
+              <div class="advanced-grid">
+                <label>
+                  <span>Tracking</span>
+                  <div class="mini-field"><input id="tracking" type="number" min="-10" max="80" step="1" value="0" /><small>px</small></div>
+                </label>
+                <label>
+                  <span>Line height</span>
+                  <div class="mini-field"><input id="lineHeight" type="number" min="70" max="200" step="1" value="108" /><small>%</small></div>
+                </label>
+              </div>
+            </details>
+          </div>
+        </section>
+
+        <section id="mediaInspector" class="inspector-section is-hidden">
+          <div class="section-title">Media</div>
+          <label id="uploadDrop" class="upload-drop" for="mediaInput">
+            <input id="mediaInput" type="file" accept="image/*,video/*,.mov,.mkv,.webm,.mp4,.m4v,.avi" />
+            <svg viewBox="0 0 22 22" aria-hidden="true"><path d="M11 15V5m0 0L7.5 8.5M11 5l3.5 3.5M4 15v2.5h14V15"/></svg>
+            <strong id="uploadLabel">Choose image or video</strong>
+            <span>or drop a file here</span>
           </label>
-          <p class="hint">Drag to position. Text scales down linearly by 2% per second during playback and export.</p>
+          <button id="removeMedia" class="danger-quiet is-hidden" type="button">Remove media</button>
+        </section>
+
+        <section class="inspector-section">
+          <div class="section-heading">
+            <div class="section-title">Position & size</div>
+            <button id="centerObject" class="icon-button" type="button" title="Center object" aria-label="Center object">
+              <svg viewBox="0 0 18 18"><path d="M9 2.5v13M2.5 9h13M5 5H3.5v1.5M13 5h1.5v1.5M5 13H3.5v-1.5M13 13h1.5v-1.5"/></svg>
+            </button>
+          </div>
+
+          <div class="transform-grid">
+            <label class="numeric-field"><span>X</span><input id="xField" type="number" min="-50" max="150" step="0.1" value="50" /><small>%</small></label>
+            <label class="numeric-field"><span>Y</span><input id="yField" type="number" min="-50" max="150" step="0.1" value="50" /><small>%</small></label>
+            <label class="numeric-field"><span>W</span><input id="widthField" type="number" min="100" max="1080" step="1" value="860" /><small>px</small></label>
+            <label class="numeric-field"><span>S</span><input id="scaleField" type="number" min="10" max="300" step="1" value="100" /><small>%</small></label>
+          </div>
+
+          <div class="animation-note">
+            <div class="motion-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M5 10h10M11.5 6.5 15 10l-3.5 3.5"/></svg></div>
+            <div><strong>Scale animation</strong><span>Linear shrink · 2% per second</span></div>
+          </div>
+        </section>
+
+        <section class="inspector-section output-summary">
+          <div class="output-row"><span>Output</span><strong>1080 × 1920</strong></div>
+          <div class="output-row"><span>Frame rate</span><strong>30 fps</strong></div>
+          <div class="output-row"><span>Audio</span><strong>Background only</strong></div>
+        </section>
+      </aside>
+
+      <section class="canvas-area" aria-label="Composition preview">
+        <div class="canvas-toolbar">
+          <div class="canvas-status"><span class="live-dot"></span>Live preview</div>
+          <div class="zoom-label">Fit</div>
         </div>
 
-        <div class="section-block export-block">
-          <button id="exportBtn" class="primary-button" type="button" disabled>Export MP4</button>
-          <div id="exportProgressWrap" class="progress-wrap is-hidden" aria-live="polite">
-            <div class="progress-track"><div id="exportProgress" class="progress-bar"></div></div>
-            <div class="progress-copy"><span id="exportStatus">Preparing…</span><span id="exportPercent">0%</span></div>
-          </div>
-          <p class="export-note">1080 × 1920 · 30 fps · H.264 MP4 · high bitrate</p>
-        </div>
-      </section>
+        <div class="stage-wrap">
+          <div id="stage" class="stage" tabindex="0">
+            <div id="missingAssets" class="missing-assets">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="m8 15 3-3 2 2 2-2 2 3"/></svg>
+              <strong>Add template videos</strong>
+              <span><code>assets/bg.webm</code> + <code>assets/fg.webm</code></span>
+            </div>
 
-      <section class="preview-column" aria-label="Video preview">
-        <div id="stage" class="stage" tabindex="0" aria-label="Video preview. Drag the middle layer to reposition it.">
-          <div id="stagePlaceholder" class="stage-placeholder">
-            <strong>Template videos not found</strong>
-            <span>Add <code>assets/bg.webm</code> and <code>assets/fg.webm</code>.</span>
+            <video id="bgVideo" class="stage-video stage-bg" playsinline preload="auto"></video>
+
+            <div id="object" class="editor-object is-selected" data-mode="text">
+              <div id="objectContent" class="object-content">
+                <div id="editableText" class="editable-text" contenteditable="false" spellcheck="false"><span style="font-family:EzerSemiBold">Meet your new </span><span style="font-family:Gestura">Toolbox</span></div>
+                <img id="mediaImage" class="media-preview is-hidden" alt="Uploaded media" />
+                <video id="mediaVideo" class="media-preview is-hidden" playsinline muted preload="metadata"></video>
+              </div>
+
+              <div id="selectionBox" class="selection-box" aria-hidden="true">
+                <div class="selection-tag">TEXT</div>
+                <button class="resize-handle corner nw" data-handle="scale" type="button" tabindex="-1"></button>
+                <button class="resize-handle corner ne" data-handle="scale" type="button" tabindex="-1"></button>
+                <button class="resize-handle corner sw" data-handle="scale" type="button" tabindex="-1"></button>
+                <button class="resize-handle corner se" data-handle="scale" type="button" tabindex="-1"></button>
+                <button class="resize-handle side west" data-handle="width-left" type="button" tabindex="-1"></button>
+                <button class="resize-handle side east" data-handle="width-right" type="button" tabindex="-1"></button>
+              </div>
+            </div>
+
+            <video id="fgVideo" class="stage-video stage-fg" playsinline muted preload="auto"></video>
           </div>
-          <video id="bgVideo" class="template-video bg-video" playsinline preload="auto"></video>
-          <div id="middleLayer" class="middle-layer" aria-hidden="true">
-            <div id="previewText" class="preview-text"><span class="font-ezer-semibold">Meet your new </span><span class="font-gestura">Toolbox</span></div>
-            <img id="previewImage" class="preview-media is-hidden" alt="Uploaded middle layer" />
-            <video id="previewMediaVideo" class="preview-media is-hidden" playsinline muted preload="metadata"></video>
-          </div>
-          <video id="fgVideo" class="template-video fg-video" playsinline muted preload="auto"></video>
-          <div id="dragHint" class="drag-hint">Drag to move</div>
         </div>
 
-        <div class="transport">
-          <button id="playBtn" class="play-button" type="button" aria-label="Play preview" disabled>
-            <span id="playIcon">▶</span>
+        <div class="transport-bar">
+          <button id="playPause" class="transport-play" type="button" disabled aria-label="Play preview">
+            <svg id="playGlyph" viewBox="0 0 20 20"><path d="m7 5 8 5-8 5z"/></svg>
           </button>
-          <span id="currentTimeLabel" class="time-label">0:00.00</span>
-          <input id="timeline" class="timeline" type="range" min="0" max="1" step="0.001" value="0" disabled aria-label="Video timeline" />
-          <span id="durationLabel" class="time-label">0:00.00</span>
+          <span id="timeNow" class="timecode">00:00.00</span>
+          <input id="timeline" class="timeline" type="range" min="0" max="1" step="0.001" value="0" disabled aria-label="Timeline" />
+          <span id="timeTotal" class="timecode">00:00.00</span>
         </div>
       </section>
     </main>
+
+    <div id="exportOverlay" class="export-overlay is-hidden" aria-live="polite">
+      <div class="export-dialog">
+        <div class="export-spinner"></div>
+        <strong id="exportTitle">Rendering video</strong>
+        <span id="exportDetail">Preparing frames…</span>
+        <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+        <div class="progress-meta"><span>1080 × 1920 · 30 fps</span><span id="progressPercent">0%</span></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status"></div>
   </div>
 
   <script type="module" src="./app.js"></script>
