@@ -25,3 +25,8 @@ Place the supplied Pitaro symbol at `assets/pitaro-symbol.svg`. The page uses it
 
 ## Mobile text styling
 Tap **Edit text**, then select a word or characters. A floating typography bar appears beside the selection and stays inside the visible area above the on-screen keyboard. Font changes and size steps preserve the selected text. **More** opens the full typography panel for spacing, alignment and text-box width.
+
+
+## Mobile text selection
+
+When text is selected on mobile, the floating typography toolbar automatically moves to the opposite edge of the visible viewport from the selection. This prevents Android/iOS native selection menus from covering the app controls and keeps the selected text visible.

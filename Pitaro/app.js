@@ -112,18 +112,42 @@ function hideMobileSelectionToolbar() {
 
 function positionMobileSelectionToolbar() {
   if (!mobileSelectionToolbar?.classList.contains('is-visible')) return;
+
   const vv = window.visualViewport;
   const viewportTop = vv ? vv.offsetTop : 0;
-  const viewportBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+  const viewportHeight = vv ? vv.height : window.innerHeight;
+  const viewportBottom = viewportTop + viewportHeight;
   const toolbarHeight = mobileSelectionToolbar.offsetHeight || 56;
+  const edgeGap = 10;
+
   let rect = null;
   try { if (savedSelectionIsUsable()) rect = savedTextRange.getBoundingClientRect(); } catch (_) {}
   if (!rect || (!rect.width && !rect.height)) rect = editableText.getBoundingClientRect();
-  let top = rect.top - toolbarHeight - 10;
-  if (top < viewportTop + 8) top = rect.bottom + 10;
-  top = Math.min(top, viewportBottom - toolbarHeight - 8);
-  top = Math.max(viewportTop + 8, top);
+
+  // Browser/OS selection menus (Define / Copy / Select all) always render around
+  // the selected text and sit above web content. We cannot out-z-index them, so
+  // intentionally keep our typography toolbar on the opposite side of the
+  // visible viewport instead of competing for the same space.
+  const selectionCenterY = rect.top + rect.height / 2;
+  const visibleCenterY = viewportTop + viewportHeight / 2;
+  const topCandidate = viewportTop + edgeGap;
+  const bottomCandidate = viewportBottom - toolbarHeight - edgeGap;
+  let top = selectionCenterY >= visibleCenterY ? topCandidate : bottomCandidate;
+
+  // If either edge position would overlap the selected text, use the other one.
+  const overlaps = (candidate) => {
+    const toolbarBottom = candidate + toolbarHeight;
+    return toolbarBottom > rect.top - 14 && candidate < rect.bottom + 14;
+  };
+  if (overlaps(top)) {
+    const alternate = top === topCandidate ? bottomCandidate : topCandidate;
+    if (!overlaps(alternate)) top = alternate;
+  }
+
+  top = Math.max(viewportTop + edgeGap, Math.min(top, viewportBottom - toolbarHeight - edgeGap));
   mobileSelectionToolbar.style.top = `${Math.round(top)}px`;
+  mobileSelectionToolbar.classList.toggle('is-docked-top', Math.abs(top - topCandidate) < 2);
+  mobileSelectionToolbar.classList.toggle('is-docked-bottom', Math.abs(top - bottomCandidate) < 2);
 }
 
 function showMobileSelectionToolbar() {
