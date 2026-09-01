@@ -30,7 +30,3 @@ Tap **Edit text**, then select a word or characters. A floating typography bar a
 ## Mobile text selection
 
 When text is selected on mobile, the floating typography toolbar automatically moves to the opposite edge of the visible viewport from the selection. This prevents Android/iOS native selection menus from covering the app controls and keeps the selected text visible.
-
-
-### Mobile selection styling
-The selected-text toolbar stays just above the mobile keyboard. The font list opens upward and scrolls within the visible viewport.
