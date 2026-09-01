@@ -1,3 +1,11 @@
+
+const brandMark = document.getElementById("brandMark");
+const brandLogo = document.getElementById("brandLogo");
+if (brandLogo && brandMark) {
+  brandLogo.addEventListener("load", () => brandMark.classList.add("has-logo"));
+  brandLogo.addEventListener("error", () => brandMark.classList.remove("has-logo"));
+  if (brandLogo.complete && brandLogo.naturalWidth > 0) brandMark.classList.add("has-logo");
+}
 const $ = (id) => document.getElementById(id);
 
 const FONT_NAMES = {
