@@ -20,7 +20,7 @@ The bundled fonts are already under `assets/fonts/`.
 - Closing logo is enabled by default.
 - Preview autoplays muted when required by browser policy and loops by default; the first user gesture restores background preview audio.
 - Export audio comes only from `bg.webm`.
-- Text starts on frame 10 at +35 px Y and rises to its final position over 10 frames using `cubic-bezier(0, 1, 0, 1)`. There is no opacity animation.
+- Text starts on frame 10 at +20 px Y and rises to its final position over 10 frames using `cubic-bezier(0, 1, 0, 1)`. There is no opacity animation.
 - `Word by word` is enabled by default. Each subsequent word starts 3 frames after the previous word, using the same position animation.
 - The existing 2%/second automatic scale remains one uniform transform on the complete editable layer.
 - The inspector contains a synchronized rich-text editor, so copy and per-selection fonts can be edited even while the animated preview text is not yet visible.
@@ -46,3 +46,10 @@ The HQ export path now uses bounded CanvasSink pools, sequential presentation-or
 On mobile, export now prefers software decoding and software H.264 encoding, uses a low-complexity AVC profile, and forces every output frame to be a key frame. This is intentionally slower and creates a larger file, but removes inter-frame dependencies and avoids buggy mobile hardware AVC paths. Output remains 1080×1920, 30 fps MP4.
 
 Text entrance position easing is `cubic-bezier(0,0,0,1)`.
+
+
+### Mobile preview optimization
+- Mobile playback uses soft playback-rate correction for secondary layers instead of repeatedly hard-seeking decoders.
+- Preview UI/text updates are limited to the 30 fps composition frame grid.
+- While dragging the playhead on mobile, video seeks are throttled for responsiveness; an exact multi-layer seek is performed on release.
+- The mobile-safe software export path from v18.7 is unchanged.

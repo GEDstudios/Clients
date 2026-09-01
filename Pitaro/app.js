@@ -20,7 +20,7 @@ const PREVIEW_FPS = 30;
 const TEXT_ENTRANCE_DELAY_FRAMES = 10;
 const TEXT_ENTRANCE_DURATION_FRAMES = 10;
 const WORD_STAGGER_FRAMES = 3;
-const TEXT_RISE_PX = 35;
+const TEXT_RISE_PX = 20;
 const TEXT_ENTRANCE_START = TEXT_ENTRANCE_DELAY_FRAMES / PREVIEW_FPS;
 
 const state = {
@@ -94,6 +94,10 @@ let scrubActive = false;
 let scrubWorkerRunning = false;
 let scrubPendingTarget = null;
 let scrubFinishRequested = false;
+let lastPreviewVisualFrame = -1;
+let mobileScrubTimer = null;
+let mobileScrubTarget = null;
+let mobileScrubFinishing = false;
 
 const MOBILE_FONT_LABELS = {
   EzerLight: 'Ezer Light',
@@ -1054,6 +1058,73 @@ function syncAt(t) {
   applyVisualState(safe);
 }
 
+function isMobilePreview() {
+  return mobileQuery.matches;
+}
+
+function setPreviewPlaybackRate(video, rate = 1) {
+  if (!video) return;
+  const safe = Math.min(1.04, Math.max(0.96, Number(rate) || 1));
+  if (Math.abs((video.playbackRate || 1) - safe) > 0.002) {
+    try { video.playbackRate = safe; } catch (_) {}
+  }
+}
+
+function fastPreviewSeek(video, target) {
+  if (target == null || !video?.src || !Number.isFinite(video.duration)) return;
+  const safe = Math.min(Math.max(0, target), Math.max(0, video.duration - 0.001));
+  try {
+    // During a drag, responsiveness matters more than decoding every intermediate frame.
+    // fastSeek is allowed to land on a nearby decodable frame; release performs an exact seek.
+    if (typeof video.fastSeek === 'function') video.fastSeek(safe);
+    else video.currentTime = safe;
+  } catch (_) {}
+}
+
+function mobileScrubSeekNow(t) {
+  fastPreviewSeek(bgVideo, scrubTargetForVideo(bgVideo, t));
+  fastPreviewSeek(fgVideo, scrubTargetForVideo(fgVideo, t));
+  if (state.closingLogoAvailable) fastPreviewSeek(fg2Video, scrubTargetForVideo(fg2Video, t));
+  if (state.mode === 'media' && state.mediaType === 'video') {
+    fastPreviewSeek(mediaVideo, scrubTargetForVideo(mediaVideo, t, true));
+  }
+}
+
+function scheduleMobileScrubSeek(t) {
+  mobileScrubTarget = t;
+  if (mobileScrubTimer != null) return;
+  mobileScrubTimer = window.setTimeout(() => {
+    mobileScrubTimer = null;
+    const target = mobileScrubTarget;
+    mobileScrubTarget = null;
+    if (target != null) mobileScrubSeekNow(target);
+  }, 42); // ~24 Hz: responsive without flooding mobile video decoders.
+}
+
+async function finishMobileScrub(t) {
+  if (mobileScrubFinishing) {
+    mobileScrubTarget = t;
+    return;
+  }
+  mobileScrubFinishing = true;
+  if (mobileScrubTimer != null) { clearTimeout(mobileScrubTimer); mobileScrubTimer = null; }
+  mobileScrubTarget = null;
+  const jobs = [
+    seekVideoAndWait(bgVideo, scrubTargetForVideo(bgVideo, t)),
+    seekVideoAndWait(fgVideo, scrubTargetForVideo(fgVideo, t)),
+  ];
+  if (state.closingLogoAvailable) jobs.push(seekVideoAndWait(fg2Video, scrubTargetForVideo(fg2Video, t)));
+  if (state.mode === 'media' && state.mediaType === 'video') jobs.push(seekVideoAndWait(mediaVideo, scrubTargetForVideo(mediaVideo, t, true)));
+  await Promise.all(jobs);
+  $('timeline').value = t;
+  $('timeNow').textContent = formatTime(t);
+  state.lastPreviewTime = t;
+  lastPreviewVisualFrame = Math.floor(t * PREVIEW_FPS + 1e-7);
+  applyVisualState(t);
+  scrubActive = false;
+  mobileScrubFinishing = false;
+}
+
 function scrubTargetForVideo(video, t, loopMedia = false) {
   if (!video?.src || !Number.isFinite(video.duration) || video.duration <= 0) return null;
   if (loopMedia) return Math.min(Math.max(0, t % video.duration), Math.max(0, video.duration - 0.001));
@@ -1107,8 +1178,14 @@ function beginAtomicScrub() {
   if (scrubActive) return;
   pausePreview();
   scrubActive = true;
-  drawScrubComposite(Number($('timeline').value) || 0);
-  scrubCanvas?.classList.remove('is-hidden');
+  // Desktop keeps the exact composite-canvas scrubber. On mobile, showing the
+  // native video layers and issuing throttled seeks is dramatically more responsive.
+  if (!isMobilePreview()) {
+    drawScrubComposite(Number($('timeline').value) || 0);
+    scrubCanvas?.classList.remove('is-hidden');
+  } else {
+    scrubCanvas?.classList.add('is-hidden');
+  }
 }
 
 async function processScrubQueue() {
@@ -1125,15 +1202,12 @@ async function processScrubQueue() {
       if (state.closingLogoAvailable) jobs.push(seekVideoAndWait(fg2Video, scrubTargetForVideo(fg2Video, t)));
       if (state.mode === 'media' && state.mediaType === 'video') jobs.push(seekVideoAndWait(mediaVideo, scrubTargetForVideo(mediaVideo, t, true)));
       await Promise.all(jobs);
-
-      // If the user moved again while decoding, skip this stale frame and go straight
-      // to the newest request. The visible scrub canvas therefore only ever displays
-      // a composition whose video layers all belong to the same requested time.
       if (scrubPendingTarget != null) continue;
 
       $('timeline').value = t;
       $('timeNow').textContent = formatTime(t);
       state.lastPreviewTime = t;
+      lastPreviewVisualFrame = Math.floor(t * PREVIEW_FPS + 1e-7);
       applyVisualState(t);
       drawScrubComposite(t);
     }
@@ -1152,7 +1226,15 @@ function requestAtomicScrub(value, finish = false) {
   beginAtomicScrub();
   $('timeline').value = t;
   $('timeNow').textContent = formatTime(t);
+  lastPreviewVisualFrame = Math.floor(t * PREVIEW_FPS + 1e-7);
   applyVisualState(t);
+
+  if (isMobilePreview()) {
+    if (finish) finishMobileScrub(t);
+    else scheduleMobileScrubSeek(t);
+    return;
+  }
+
   scrubPendingTarget = t;
   if (finish) scrubFinishRequested = true;
   processScrubQueue();
@@ -1180,6 +1262,8 @@ async function playPreview({ preserveUi = false } = {}) {
   if (state.closingLogoAvailable) setVideoTime(fg2Video, current);
   if (state.mediaType === 'video') setVideoTime(mediaVideo, current % Math.max(.001, mediaVideo.duration || state.duration));
   state.lastPreviewTime = current;
+  lastPreviewVisualFrame = -1;
+  for (const video of [bgVideo, fgVideo, fg2Video, mediaVideo]) setPreviewPlaybackRate(video, 1);
   try {
     await previewMasterVideo.play();
     if (previewMasterVideo !== bgVideo) bgVideo.play().catch(() => {});
@@ -1197,6 +1281,7 @@ async function playPreview({ preserveUi = false } = {}) {
 
 function pausePreview() {
   bgVideo.pause(); fgVideo.pause(); fg2Video.pause(); mediaVideo.pause();
+  for (const video of [bgVideo, fgVideo, fg2Video, mediaVideo]) setPreviewPlaybackRate(video, 1);
   cancelAnimationFrame(state.raf);
   $('playGlyph').innerHTML = '<path d="m7 5 8 5-8 5z"/>';
 }
@@ -1223,21 +1308,44 @@ function tickPreview() {
   if (wrapped) replaySecondaryLayersAt(t);
   state.lastPreviewTime = t;
 
-  $('timeline').value = Math.min(t, state.duration);
-  $('timeNow').textContent = formatTime(t);
-  const syncTemplateVideo = (video) => {
+  const syncTemplateVideo = (video, loop = false) => {
     if (!Number.isFinite(video.duration) || video.duration <= 0 || video === previewMasterVideo) return;
-    const target = Math.min(t, Math.max(0, video.duration - .001));
-    if (Math.abs(video.currentTime - target) > .08) setVideoTime(video, t);
+    const target = loop
+      ? (t % video.duration)
+      : Math.min(t, Math.max(0, video.duration - .001));
+    const drift = video.currentTime - target;
+
+    if (isMobilePreview()) {
+      // Never continuously hard-seek mobile decoders. Small drift is corrected by
+      // a tiny temporary playback-rate change; only a genuinely lost layer is seeked.
+      if (Math.abs(drift) > 0.28) {
+        setVideoTime(video, target);
+        setPreviewPlaybackRate(video, 1);
+      } else if (Math.abs(drift) > 0.025) {
+        setPreviewPlaybackRate(video, 1 - drift * 0.18);
+      } else {
+        setPreviewPlaybackRate(video, 1);
+      }
+    } else {
+      if (Math.abs(drift) > .08) setVideoTime(video, target);
+    }
   };
+
   syncTemplateVideo(bgVideo);
   syncTemplateVideo(fgVideo);
   if (state.closingLogoAvailable) syncTemplateVideo(fg2Video);
-  if (state.mode === 'media' && state.mediaType === 'video' && mediaVideo.duration) {
-    const mt = t % mediaVideo.duration;
-    if (Math.abs(mediaVideo.currentTime - mt) > .1) setVideoTime(mediaVideo, mt);
+  if (state.mode === 'media' && state.mediaType === 'video' && mediaVideo.duration) syncTemplateVideo(mediaVideo, true);
+
+  // The visual/editor UI only changes on 30 fps composition frames. This avoids
+  // doing expensive rich-text/layout work 60–120 times per second on phones.
+  const visualFrame = Math.floor(t * PREVIEW_FPS + 1e-7);
+  if (visualFrame !== lastPreviewVisualFrame) {
+    lastPreviewVisualFrame = visualFrame;
+    const frameTime = visualFrame / PREVIEW_FPS;
+    $('timeline').value = Math.min(frameTime, state.duration);
+    $('timeNow').textContent = formatTime(frameTime);
+    applyVisualState(frameTime);
   }
-  applyVisualState(t);
   state.raf = requestAnimationFrame(tickPreview);
 }
 
