@@ -19,7 +19,7 @@ The composition duration is the longest of `bg.webm`, `fg.webm`, and `fg2.webm`.
 - Preview autoplays and loops by default.
 - Text is hidden for the first 10 frames.
 - On frame 10 it appears fully opaque 50 px below its final position.
-- It rises into place with `cubic-bezier(0,0.5,0,1)`. In whole-sentence mode, the first visible frame is already the first moving frame (there is no static hold at +50 px).
+- It rises into place over 10 frames with `cubic-bezier(0,0.5,0,1)`.
 - There is no entrance opacity animation.
 - `Word by word` staggers each word by 3 frames while keeping the same position animation.
 - The existing automatic scale animation remains one uniform transform for the complete text layer.
@@ -31,3 +31,7 @@ Tap **Edit text**, select characters, and use the floating typography toolbar ab
 
 ## Deploy
 Upload the folder contents to a GitHub repository and enable GitHub Pages for the repository root.
+
+
+## v17 timing correction
+The sentence reveal uses the frame-10 +50 px keyframe directly; it is not pre-advanced by one frame. Position easing is `cubic-bezier(0,0.5,0,1)`.

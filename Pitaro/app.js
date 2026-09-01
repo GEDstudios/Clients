@@ -256,17 +256,10 @@ function textEntranceAt(time, wordIndex = 0) {
   const stagger = state.wordByWord ? Math.max(0, wordIndex) * WORD_STAGGER_FRAMES : 0;
   const start = TEXT_ENTRANCE_DELAY_FRAMES + stagger;
   if (frame + 1e-7 < start) return { visible: false, offset: TEXT_RISE_PX };
-
-  // In whole-sentence mode, frames 0-9 are fully hidden and frame 10 is
-  // already the first moving frame. This avoids a one-frame hold at +50 px.
-  // Word-by-word keeps the exact staggered keyframe timing for each word.
-  const rawProgress = state.wordByWord
-    ? (frame - start) / TEXT_ENTRANCE_DURATION_FRAMES
-    : (frame - start + 1) / TEXT_ENTRANCE_DURATION_FRAMES;
-  const p = Math.min(1, Math.max(0, rawProgress));
-
-  // Exact cubic-bezier(0,0.5,0,1).
-  // x(u)=u^3, so u=cuberoot(p); y(u)=1.5u-0.5u^3.
+  // Frame 10 is the first visible keyframe at +50 px. Motion begins from
+  // that keyframe onward; do not pre-advance the reveal by a frame.
+  const p = Math.min(1, Math.max(0, (frame - start) / TEXT_ENTRANCE_DURATION_FRAMES));
+  // Exact cubic-bezier(0,0.5,0,1): x(u)=u^3, y(u)=1.5u-0.5u^3.
   const u = Math.cbrt(p);
   const eased = 1.5 * u - 0.5 * p;
   return { visible: true, offset: TEXT_RISE_PX * (1 - eased) };
