@@ -257,9 +257,12 @@ function textEntranceAt(time, wordIndex = 0) {
   const start = TEXT_ENTRANCE_DELAY_FRAMES + stagger;
   if (frame + 1e-7 < start) return { visible: false, offset: TEXT_RISE_PX };
   const p = Math.min(1, Math.max(0, (frame - start) / TEXT_ENTRANCE_DURATION_FRAMES));
-  // Exact cubic-bezier(0,0,0,1): x=u^3, y=3u^2-2u^3.
+  // For a full sentence, keep it hidden on the zero-motion keyframe itself;
+  // its first visible frame is also the first frame whose position has changed.
+  if (!state.wordByWord && p <= 1e-7) return { visible: false, offset: TEXT_RISE_PX };
+  // Exact cubic-bezier(0,0.5,0,1): x=u^3, y=1.5u-0.5u^3.
   const u = Math.cbrt(p);
-  const eased = 3 * u * u - 2 * p;
+  const eased = 1.5 * u - 0.5 * p;
   return { visible: true, offset: TEXT_RISE_PX * (1 - eased) };
 }
 

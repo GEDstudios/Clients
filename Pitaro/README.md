@@ -18,8 +18,8 @@ The composition duration is the longest of `bg.webm`, `fg.webm`, and `fg2.webm`.
 
 - Preview autoplays and loops by default.
 - Text is hidden for the first 10 frames.
-- On frame 10 it appears fully opaque 50 px below its final position.
-- It rises into place over 10 frames with `cubic-bezier(0,0,0,1)`.
+- The full-sentence mode becomes visible on its first moving frame (not on the static 50 px-offset keyframe).
+- It rises into place over 10 frames with `cubic-bezier(0,0.5,0,1)`.
 - There is no entrance opacity animation.
 - `Word by word` staggers each word by 3 frames while keeping the same position animation.
 - The existing automatic scale animation remains one uniform transform for the complete text layer.
