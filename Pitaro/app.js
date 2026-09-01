@@ -20,7 +20,7 @@ const PREVIEW_FPS = 30;
 const TEXT_ENTRANCE_DELAY_FRAMES = 10;
 const TEXT_ENTRANCE_DURATION_FRAMES = 10;
 const WORD_STAGGER_FRAMES = 3;
-const TEXT_RISE_PX = 20;
+const TEXT_RISE_PX = 35;
 const TEXT_ENTRANCE_START = TEXT_ENTRANCE_DELAY_FRAMES / PREVIEW_FPS;
 
 const state = {
@@ -43,7 +43,7 @@ const state = {
   templateReady: false,
   closingLogo: true,
   closingLogoAvailable: false,
-  wordByWord: false,
+  wordByWord: true,
   previewAudioUnlocked: false,
   lastPreviewTime: 0,
   raf: null,
@@ -1256,7 +1256,7 @@ async function exportVideo() {
     const mb = await import('https://cdn.jsdelivr.net/npm/mediabunny@1.55.4/+esm');
     const {
       Input, ALL_FORMATS, BlobSource, CanvasSink, AudioBufferSink,
-      Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality,
+      Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource, Quality, canEncodeVideo,
     } = mb;
 
     $('exportDetail').textContent = 'Reading template…';
@@ -1291,79 +1291,32 @@ async function exportVideo() {
     const frameDuration = 1 / fps;
     const frameCount = Math.max(1, Math.round(duration * fps));
 
-    // Sequential decode with two-frame lookahead. We interpolate between the
-    // surrounding source frames instead of asking for "the last frame <= t".
-    // That avoids accidental repeats from WebM's millisecond timestamp grid and
-    // also produces smooth CFR output when the source cadence is slightly uneven.
+    // Deterministic CFR template decode: consume exactly one decoded source frame
+    // per 30 fps output frame. This path is intentionally identical on desktop
+    // and mobile so browser FPS-metric support cannot alter export cadence.
     const bgSink = new CanvasSink(bgTrack, { width: 1080, height: 1920, fit: 'fill' });
     const fgSink = new CanvasSink(fgTrack, { width: 1080, height: 1920, fit: 'fill', alpha: true });
     const fg2Sink = state.closingLogo && fg2Track ? new CanvasSink(fg2Track, { width: 1080, height: 1920, fit: 'fill', alpha: true }) : null;
 
-    function makeSequentialSampler(sink, endTime) {
-      const iterator = sink.canvases(0, endTime)[Symbol.asyncIterator]();
-      let a = null, b = null, initialized = false, ended = false;
-      async function pull() {
-        const r = await iterator.next();
-        if (r.done || !r.value) { ended = true; return null; }
-        return r.value;
-      }
-      return {
-        async sample(t) {
-          if (!initialized) {
-            a = await pull();
-            b = await pull();
-            initialized = true;
-          }
-          if (!a) return null;
-          while (b && t >= b.timestamp) {
-            a = b;
-            b = await pull();
-          }
-          if (!b || ended || b.timestamp <= a.timestamp) return { a: a.canvas, b: null, mix: 0 };
-          const mix = Math.max(0, Math.min(1, (t - a.timestamp) / (b.timestamp - a.timestamp)));
-          return { a: a.canvas, b: b.canvas, mix };
-        }
-      };
-    }
-
-    const bgSampler = makeSequentialSampler(bgSink, bgDuration + frameDuration);
-    const fgSampler = makeSequentialSampler(fgSink, fgDuration + frameDuration);
-    const fg2Sampler = fg2Sink ? makeSequentialSampler(fg2Sink, fg2Duration + frameDuration) : null;
-
-    // If the templates are native ~30 fps, map source frames 1:1 to output frames.
-    // This is the most deterministic path and cannot repeat a source frame because
-    // of timestamp rounding. Other source rates fall back to sequential resampling.
-    let nativeThirty = false;
-    try {
-      const metricPromises = [bgTrack.computeFrameRateMetrics(), fgTrack.computeFrameRateMetrics()];
-      if (fg2Sink) metricPromises.push(fg2Track.computeFrameRateMetrics());
-      const [bgFps, fgFps, fg2Fps] = await Promise.all(metricPromises);
-      nativeThirty = Math.abs(bgFps.bestGuessFrameRate - fps) < 0.35 && Math.abs(fgFps.bestGuessFrameRate - fps) < 0.35;
-      if (fg2Fps) nativeThirty = nativeThirty && Math.abs(fg2Fps.bestGuessFrameRate - fps) < 0.35;
-      console.info('Template FPS', { background: bgFps.bestGuessFrameRate, foreground: fgFps.bestGuessFrameRate, closingLogo: fg2Fps?.bestGuessFrameRate, nativeThirty });
-    } catch (_) {}
-    const bgNativeIterator = nativeThirty ? bgSink.canvases(0, bgDuration + frameDuration)[Symbol.asyncIterator]() : null;
-    const fgNativeIterator = nativeThirty ? fgSink.canvases(0, fgDuration + frameDuration)[Symbol.asyncIterator]() : null;
-    const fg2NativeIterator = nativeThirty && fg2Sink ? fg2Sink.canvases(0, fg2Duration + frameDuration)[Symbol.asyncIterator]() : null;
-
-    // Native 30 fps readers hold their final frame once a shorter layer ends.
-    // This matches browser video behavior while the composition continues to
-    // the longest of bg / fg / fg2.
-    function makeHeldNativeReader(iterator) {
+    function makeHeldSequentialReader(sink, endTime) {
+      const iterator = sink ? sink.canvases(0, endTime + frameDuration)[Symbol.asyncIterator]() : null;
       let last = null;
+      let ended = !iterator;
       return {
         async nextFrame() {
-          if (iterator) {
+          if (!ended) {
             const r = await iterator.next();
             if (!r.done && r.value?.canvas) last = r.value.canvas;
+            else ended = true;
           }
           return last;
         }
       };
     }
-    const bgNativeReader = nativeThirty ? makeHeldNativeReader(bgNativeIterator) : null;
-    const fgNativeReader = nativeThirty ? makeHeldNativeReader(fgNativeIterator) : null;
-    const fg2NativeReader = nativeThirty && fg2NativeIterator ? makeHeldNativeReader(fg2NativeIterator) : null;
+
+    const bgReader = makeHeldSequentialReader(bgSink, bgDuration);
+    const fgReader = makeHeldSequentialReader(fgSink, fgDuration);
+    const fg2Reader = fg2Sink ? makeHeldSequentialReader(fg2Sink, fg2Duration) : null;
 
     let mediaInputExport = null, mediaIterator = null, mediaBitmap = null;
     if (state.mode === 'media' && state.mediaFile) {
@@ -1387,14 +1340,36 @@ async function exportVideo() {
 
     const renderCanvas = document.createElement('canvas');
     renderCanvas.width = 1080; renderCanvas.height = 1920;
-    const ctx = renderCanvas.getContext('2d', { alpha: false, desynchronized: true });
+    const ctx = renderCanvas.getContext('2d', { alpha: false });
 
     const target = new BufferTarget();
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-    const videoSource = new CanvasSource(renderCanvas, {
+    // HQ offline AVC. Prefer High Profile 4.1 where the device supports it;
+    // otherwise retain the same high-quality rate control with the browser's
+    // compatible AVC profile. Quality mode does not permit encoder frame drops.
+    const hqQuality = new Quality({ quantizer: 14, bitrate: 40_000_000 });
+    const baseVideoConfig = {
       codec: 'avc',
-      quality: new Quality({ bitrate: 20_000_000 }),
+      quality: hqQuality,
       keyFrameInterval: 2,
+      latencyMode: 'quality',
+      hardwareAcceleration: 'prefer-hardware',
+      contentHint: 'detail',
+    };
+    let useHighProfile = false;
+    if (typeof canEncodeVideo === 'function') {
+      try {
+        useHighProfile = await canEncodeVideo('avc', {
+          width: 1080, height: 1920, frameRate: fps,
+          quality: hqQuality, latencyMode: 'quality',
+          hardwareAcceleration: 'prefer-hardware',
+          fullCodecString: 'avc1.640029',
+        });
+      } catch (_) {}
+    }
+    const videoSource = new CanvasSource(renderCanvas, {
+      ...baseVideoConfig,
+      ...(useHighProfile ? { fullCodecString: 'avc1.640029' } : {}),
     });
     // Declare the intended CFR explicitly so timestamps/durations are snapped to 30 fps.
     output.addVideoTrack(videoSource, { frameRate: fps });
@@ -1408,7 +1383,7 @@ async function exportVideo() {
     }
 
     await output.start();
-    $('exportDetail').textContent = 'Rendering frames…';
+    $('exportDetail').textContent = 'Rendering HQ frames…';
 
     const audioPromise = (async () => {
       if (!audioSource || !audioSink) return;
@@ -1418,22 +1393,15 @@ async function exportVideo() {
 
     for (let i = 0; i < frameCount; i++) {
       const t = i * frameDuration;
-      let bgFrame, fgFrame, fg2Frame = null;
-      if (nativeThirty) {
-        const [bgCanvas, fgCanvas, fg2Canvas] = await Promise.all([
-          bgNativeReader.nextFrame(),
-          fgNativeReader.nextFrame(),
-          fg2NativeReader ? fg2NativeReader.nextFrame() : Promise.resolve(null),
-        ]);
-        if (!bgCanvas || !fgCanvas) throw new Error(`Could not decode template frame ${i + 1}.`);
-        bgFrame = { a: bgCanvas, b: null, mix: 0 };
-        fgFrame = { a: fgCanvas, b: null, mix: 0 };
-        if (fg2Canvas) fg2Frame = { a: fg2Canvas, b: null, mix: 0 };
-      } else {
-        const sampled = await Promise.all([bgSampler.sample(t), fgSampler.sample(t), fg2Sampler ? fg2Sampler.sample(t) : Promise.resolve(null)]);
-        [bgFrame, fgFrame, fg2Frame] = sampled;
-      }
-      if (!bgFrame?.a || !fgFrame?.a) throw new Error(`Could not decode frame ${i + 1}.`);
+      const [bgCanvas, fgCanvas, fg2Canvas] = await Promise.all([
+        bgReader.nextFrame(),
+        fgReader.nextFrame(),
+        fg2Reader ? fg2Reader.nextFrame() : Promise.resolve(null),
+      ]);
+      if (!bgCanvas || !fgCanvas) throw new Error(`Could not decode template frame ${i + 1}.`);
+      const bgFrame = { a: bgCanvas, b: null, mix: 0 };
+      const fgFrame = { a: fgCanvas, b: null, mix: 0 };
+      const fg2Frame = fg2Canvas ? { a: fg2Canvas, b: null, mix: 0 } : null;
 
       ctx.clearRect(0, 0, 1080, 1920);
       ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 1080, 1920);
