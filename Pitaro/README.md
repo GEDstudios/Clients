@@ -34,3 +34,8 @@ Upload the project contents to a repository and enable GitHub Pages from the rep
 - Export no longer assumes one decoded input frame equals one output frame. Each 30 fps output frame is selected from the source videos using their real presentation timestamps through monotonic `canvasesAtTimestamps` decoding.
 - Source videos can therefore be 29.97, 30, 60, or variable-frame-rate without corrupting the output cadence.
 - Mobile AVC output remains 1080×1920 at fixed 30 fps, but uses a mobile-decodable ~18 Mbps VBR quality target and High Profile Level 4.0 only when supported. Encoder latency mode remains `quality` (no intentional frame dropping).
+
+
+## v18.6 mobile export stability
+
+The HQ export path now uses bounded CanvasSink pools, sequential presentation-order decoding, serialized template-layer decoding, audio-first encoding, and a mobile-friendly H.264 Main@4.0 preference. These changes are specifically intended to avoid mobile GPU/codec memory pressure and cadence corruption while preserving 1080x1920 30 fps output.

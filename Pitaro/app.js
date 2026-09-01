@@ -1360,6 +1360,7 @@ async function exportVideo() {
   closeMobileInspector();
   if (!state.templateReady) return showToast('Add bg.webm and fg.webm first.');
   if (!('VideoEncoder' in window)) return showToast('This browser cannot encode MP4. Update the browser or try Chrome, Edge, or Safari.');
+  const isMobileExport = Boolean(navigator.userAgentData?.mobile) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   pausePreview();
   exitTextEdit();
   object.classList.remove('is-selected');
@@ -1412,40 +1413,45 @@ async function exportVideo() {
     const frameDuration = 1 / fps;
     const frameCount = Math.max(1, Math.round(duration * fps));
 
-    // Timestamp-correct CFR sampling. `canvasesAtTimestamps` keeps decoding
-    // sequential/optimized, but selects frames from their real presentation timestamps.
-    // Sampling the center of each 1/30 s output interval avoids WebM timestamp
-    // quantization picking the previous frame at boundaries. This works correctly even
-    // when an input is 29.97, 30, 60, or variable-frame-rate.
-    const bgSink = new CanvasSink(bgTrack, { width: 1080, height: 1920, fit: 'fill' });
-    const fgSink = new CanvasSink(fgTrack, { width: 1080, height: 1920, fit: 'fill', alpha: true });
-    const fg2Sink = state.closingLogo && fg2Track ? new CanvasSink(fg2Track, { width: 1080, height: 1920, fit: 'fill', alpha: true }) : null;
+    // Mobile-safe sequential CFR sampling. CanvasSink normally allocates a new
+    // full-resolution canvas for every yielded frame; using a 2-canvas pool keeps
+    // VRAM bounded while still allowing us to hold the current + next frame.
+    // We iterate native frames in presentation order and choose the last source
+    // frame whose real timestamp is <= the center of each exact 1/30 s output slot.
+    // This avoids random seeking, duplicate-boundary sampling, and unbounded canvas
+    // allocation on mobile GPUs.
+    const sinkBase = { width: 1080, height: 1920, fit: 'fill', poolSize: 2 };
+    const bgSink = new CanvasSink(bgTrack, sinkBase);
+    const fgSink = new CanvasSink(fgTrack, { ...sinkBase, alpha: true });
+    const fg2Sink = state.closingLogo && fg2Track ? new CanvasSink(fg2Track, { ...sinkBase, alpha: true }) : null;
 
-    async function makeCfrReader(track, sink, endTime) {
-      if (!track || !sink || !(endTime > 0)) return null;
-      let first = 0;
-      try { first = await track.getFirstTimestamp(); } catch (_) {}
-      const last = Math.max(first, endTime - 1e-6);
-      const timestamps = Array.from({ length: frameCount }, (_, i) => {
-        const center = (i + 0.5) * frameDuration;
-        return Math.min(last, Math.max(first, center));
-      });
-      const iterator = sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]();
-      let held = null;
+    async function makeSequentialCfrReader(track, sink) {
+      if (!track || !sink) return null;
+      const iterator = sink.canvases()[Symbol.asyncIterator]();
+      const firstResult = await iterator.next();
+      if (firstResult.done || !firstResult.value?.canvas) return null;
+      let current = firstResult.value;
+      let nextResult = await iterator.next();
+      let next = nextResult.done ? null : nextResult.value;
+
       return {
-        async nextFrame() {
-          const r = await iterator.next();
-          if (!r.done && r.value?.canvas) held = r.value.canvas;
-          return held;
+        async frameAt(targetTime) {
+          // CanvasSink.canvases() is in presentation order. Advance only while the
+          // next frame has actually started by this output sample time.
+          while (next && next.timestamp <= targetTime + 1e-9) {
+            current = next;
+            nextResult = await iterator.next();
+            next = nextResult.done ? null : nextResult.value;
+          }
+          return current?.canvas || null;
         }
       };
     }
 
-    const [bgReader, fgReader, fg2Reader] = await Promise.all([
-      makeCfrReader(bgTrack, bgSink, bgDuration),
-      makeCfrReader(fgTrack, fgSink, fgDuration),
-      fg2Sink ? makeCfrReader(fg2Track, fg2Sink, fg2Duration) : Promise.resolve(null),
-    ]);
+    const bgReader = await makeSequentialCfrReader(bgTrack, bgSink);
+    const fgReader = await makeSequentialCfrReader(fgTrack, fgSink);
+    const fg2Reader = fg2Sink ? await makeSequentialCfrReader(fg2Track, fg2Sink) : null;
+    if (!bgReader || !fgReader) throw new Error('Could not initialize template video decoders.');
 
     let mediaInputExport = null, mediaIterator = null, mediaBitmap = null;
     if (state.mode === 'media' && state.mediaFile) {
@@ -1460,7 +1466,7 @@ async function exportVideo() {
         const mh = await mediaTrack.getDisplayHeight();
         if (mw && mh) state.mediaRatio = mw / mh;
         const mediaDuration = await mediaTrack.computeDuration();
-        const mediaSink = new CanvasSink(mediaTrack);
+        const mediaSink = new CanvasSink(mediaTrack, { poolSize: 2 });
         // Uploaded middle-layer videos may loop. Build each loop as a monotonic
         // timestamp reader, and restart the optimized decoder only at loop boundaries.
         let mediaFirst = 0;
@@ -1507,23 +1513,27 @@ async function exportVideo() {
     const baseVideoConfig = {
       codec: 'avc',
       quality: hqQuality,
-      keyFrameInterval: 2,
+      keyFrameInterval: 1,
       latencyMode: 'quality',
       contentHint: 'detail',
     };
-    let useHighProfile = false;
+    // Main@4.0 is deliberately preferred on mobile: it is broadly hardware-decodable
+    // while retaining essentially all of the quality benefit of the high bitrate.
+    // Desktop keeps High@4.0 when supported.
+    const preferredCodecString = isMobileExport ? 'avc1.4d0028' : 'avc1.640028';
+    let usePreferredProfile = false;
     if (typeof canEncodeVideo === 'function') {
       try {
-        useHighProfile = await canEncodeVideo('avc', {
+        usePreferredProfile = await canEncodeVideo('avc', {
           width: 1080, height: 1920, frameRate: fps,
           quality: hqQuality, latencyMode: 'quality',
-          fullCodecString: 'avc1.640028',
+          fullCodecString: preferredCodecString,
         });
       } catch (_) {}
     }
     const videoSource = new CanvasSource(renderCanvas, {
       ...baseVideoConfig,
-      ...(useHighProfile ? { fullCodecString: 'avc1.640028' } : {}),
+      ...(usePreferredProfile ? { fullCodecString: preferredCodecString } : {}),
     });
     // Declare the intended CFR explicitly so timestamps/durations are snapped to 30 fps.
     output.addVideoTrack(videoSource, { frameRate: fps });
@@ -1537,21 +1547,27 @@ async function exportVideo() {
     }
 
     await output.start();
-    $('exportDetail').textContent = 'Rendering synchronized HQ frames…';
 
-    const audioPromise = (async () => {
-      if (!audioSource || !audioSink) return;
+    // Encode the small audio track first. On phones this avoids running an audio
+    // encoder at the same time as three video decoders + the H.264 encoder.
+    if (audioSource && audioSink) {
+      $('exportDetail').textContent = 'Preparing audio…';
       for await (const wrapped of audioSink.buffers(0, bgDuration)) await audioSource.add(wrapped.buffer);
       audioSource.close();
-    })();
+    }
+
+    $('exportDetail').textContent = 'Rendering synchronized HQ frames…';
 
     for (let i = 0; i < frameCount; i++) {
       const t = i * frameDuration;
-      const [bgCanvas, fgCanvas, fg2Canvas] = await Promise.all([
-        bgReader.nextFrame(),
-        fgReader.nextFrame(),
-        fg2Reader ? fg2Reader.nextFrame() : Promise.resolve(null),
-      ]);
+      const sampleT = Math.min(Math.max(0, duration - 1e-6), (i + 0.5) * frameDuration);
+
+      // Decode template layers serially on purpose. Concurrent 1080x1920 VP9/alpha
+      // decoding plus H.264 encoding can overwhelm mobile codec/GPU resources even
+      // during an offline render. Serial decoding is slower but deterministic.
+      const bgCanvas = await bgReader.frameAt(sampleT);
+      const fgCanvas = await fgReader.frameAt(sampleT);
+      const fg2Canvas = fg2Reader ? await fg2Reader.frameAt(sampleT) : null;
       if (!bgCanvas || !fgCanvas) throw new Error(`Could not decode template frame ${i + 1}.`);
       const bgFrame = { a: bgCanvas, b: null, mix: 0 };
       const fgFrame = { a: fgCanvas, b: null, mix: 0 };
@@ -1592,7 +1608,7 @@ async function exportVideo() {
           ctx.globalAlpha = 1;
         }
       }
-      await videoSource.add(t, frameDuration, i % (fps * 2) === 0 ? { keyFrame: true } : undefined);
+      await videoSource.add(t, frameDuration, i % fps === 0 ? { keyFrame: true } : undefined);
 
       const pct = Math.round(((i + 1) / frameCount) * 96);
       $('progressFill').style.width = `${pct}%`;
@@ -1600,7 +1616,6 @@ async function exportVideo() {
       if (i % 8 === 0) await new Promise(requestAnimationFrame);
     }
     videoSource.close();
-    await audioPromise;
     $('exportDetail').textContent = 'Finalizing MP4…';
     $('progressFill').style.width = '98%'; $('progressPercent').textContent = '98%';
     await output.finalize();
@@ -1613,8 +1628,7 @@ async function exportVideo() {
     $('progressFill').style.width = '100%'; $('progressPercent').textContent = '100%';
     $('exportDetail').textContent = 'Done';
 
-    const touchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-    if (touchDevice) {
+    if (isMobileExport || window.matchMedia('(hover: none) and (pointer: coarse)').matches) {
       pendingExport = { url, file };
       $('exportSaveButton').classList.remove('is-hidden');
       $('exportTitle').textContent = 'Video ready';
