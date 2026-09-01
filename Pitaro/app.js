@@ -390,7 +390,9 @@ function updateTextEntrancePreview(time) {
     animatedText.classList.toggle('motion-hidden', !motion.visible);
     animatedText.style.transform = `translateY(${motion.offset * unit}px)`;
     words.forEach((word) => {
-      word.style.visibility = 'visible';
+      // Do not force child visibility to `visible`: that overrides a hidden parent.
+      // Whole-text mode is gated exclusively by the parent motion layer.
+      word.style.removeProperty('visibility');
       word.style.transform = 'translateY(0)';
     });
     return;
