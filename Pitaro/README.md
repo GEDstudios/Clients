@@ -20,7 +20,7 @@ The bundled fonts are already under `assets/fonts/`.
 - Closing logo is enabled by default.
 - Preview autoplays muted when required by browser policy and loops by default; the first user gesture restores background preview audio.
 - Export audio comes only from `bg.webm`.
-- Text starts on frame 10 at +50 px Y and rises to its final position over 10 frames using `cubic-bezier(0, 0.5, 0, 1)`. There is no opacity animation.
+- Text starts on frame 10 at +20 px Y and rises to its final position over 10 frames using `cubic-bezier(0, 1, 0, 1)`. There is no opacity animation.
 - `Word by word` starts each subsequent word 3 frames after the previous word, using the same position animation.
 - The existing 2%/second automatic scale remains one uniform transform on the complete editable layer.
 - The inspector contains a synchronized rich-text editor, so copy and per-selection fonts can be edited even while the animated preview text is not yet visible.

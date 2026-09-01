@@ -20,7 +20,7 @@ const PREVIEW_FPS = 30;
 const TEXT_ENTRANCE_DELAY_FRAMES = 10;
 const TEXT_ENTRANCE_DURATION_FRAMES = 10;
 const WORD_STAGGER_FRAMES = 3;
-const TEXT_RISE_PX = 50;
+const TEXT_RISE_PX = 20;
 const TEXT_ENTRANCE_START = TEXT_ENTRANCE_DELAY_FRAMES / PREVIEW_FPS;
 
 const state = {
@@ -268,10 +268,10 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
 }
 
-function cubicBezier00501(progress) {
+function cubicBezier0101(progress) {
   const p = Math.min(1, Math.max(0, Number(progress) || 0));
-  const u = Math.cbrt(p); // x(u) = u^3 for cubic-bezier(0,.5,0,1)
-  return 1.5 * u - 0.5 * p;
+  const u = Math.cbrt(p); // x(u) = u^3 for cubic-bezier(0,1,0,1)
+  return 1 - Math.pow(1 - u, 3);
 }
 
 function textEntranceAt(time, wordIndex = 0) {
@@ -281,7 +281,7 @@ function textEntranceAt(time, wordIndex = 0) {
   // Frames before the start keyframe are not rendered at all. No opacity animation.
   if (frame + 1e-6 < startFrame) return { visible: false, offset: TEXT_RISE_PX };
   const progress = (frame - startFrame) / TEXT_ENTRANCE_DURATION_FRAMES;
-  const eased = cubicBezier00501(progress);
+  const eased = cubicBezier0101(progress);
   return { visible: true, offset: TEXT_RISE_PX * (1 - eased) };
 }
 
