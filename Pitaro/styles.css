@@ -24,9 +24,9 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--bg)}
-button,input,select{font:inherit;color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 svg{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
 .is-hidden{display:none!important}
 
@@ -273,3 +273,19 @@ svg{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-
 
 /* v14: safe low mobile typography toolbar */
 @media(max-width:760px){.mobile-selection-toolbar.is-docked-bottom{box-shadow:0 -6px 26px rgba(0,0,0,.14)}.mobile-font-popover{scrollbar-width:thin}}
+
+
+/* v15 text copy + deterministic entrance animation */
+.text-copy-control{display:flex;flex-direction:column;gap:7px}
+.text-copy-control textarea{width:100%;min-height:74px;max-height:150px;resize:vertical;padding:10px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#242423;outline:none;font-size:12px;line-height:1.35}
+.text-copy-control textarea:focus{border-color:#a8a8a3}
+.animated-text{pointer-events:none;cursor:default;transform:translateY(0);will-change:transform;visibility:hidden}
+.editor-object:not(.is-editing) .editable-text-model{position:absolute;inset:0;visibility:hidden;pointer-events:none}
+.editor-object.is-editing .editable-text-model{position:relative;visibility:visible;pointer-events:auto}
+.editor-object.is-editing .animated-text{display:none}
+.motion-word{display:inline-block;white-space:pre;will-change:transform;visibility:hidden}
+.motion-space{white-space:pre}
+
+@media(max-width:760px){
+  .text-copy-control textarea{min-height:88px;max-height:128px;font-size:16px;border-radius:11px;padding:11px 12px}
+}

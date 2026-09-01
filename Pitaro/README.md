@@ -8,25 +8,26 @@ Place these files in `assets/`:
 - `bg.webm`
 - `fg.webm` — transparent foreground
 - `fg2.webm` — transparent closing-logo overlay
+- `pitaro-symbol.svg` — page/header symbol
 
-Fonts are already included under `assets/fonts/`.
+Fonts are included under `assets/fonts/`.
 
-The composition duration is automatically set to the longest of `bg.webm`, `fg.webm`, and `fg2.webm`. Audio comes only from `bg.webm`.
+The composition duration is the longest of `bg.webm`, `fg.webm`, and `fg2.webm`. Export audio comes only from `bg.webm`. `Closing logo` is enabled by default.
 
-`Closing logo` is enabled by default and can be toggled from the editor controls.
+## Text motion
+
+- Preview autoplays and loops by default.
+- Text is hidden for the first 10 frames.
+- On frame 10 it appears fully opaque 50 px below its final position.
+- It rises into place over 10 frames with `cubic-bezier(0,0,0,1)`.
+- There is no entrance opacity animation.
+- `Word by word` staggers each word by 3 frames while keeping the same position animation.
+- The existing automatic scale animation remains one uniform transform for the complete text layer.
+
+The text can also be edited from the Typography panel using the dedicated text field, including while the animated text is currently hidden in the preview.
+
+## Mobile text styling
+Tap **Edit text**, select characters, and use the floating typography toolbar above the keyboard. Font changes and size steps preserve the selection; **More** opens the full typography panel.
 
 ## Deploy
 Upload the folder contents to a GitHub repository and enable GitHub Pages for the repository root.
-
-
-## Branding
-
-Place the supplied Pitaro symbol at `assets/pitaro-symbol.svg`. The page uses it as the header logo and favicon.
-
-## Mobile text styling
-Tap **Edit text**, then select a word or characters. A floating typography bar appears beside the selection and stays inside the visible area above the on-screen keyboard. Font changes and size steps preserve the selected text. **More** opens the full typography panel for spacing, alignment and text-box width.
-
-
-## Mobile text selection
-
-When text is selected on mobile, the floating typography toolbar automatically moves to the opposite edge of the visible viewport from the selection. This prevents Android/iOS native selection menus from covering the app controls and keeps the selected text visible.

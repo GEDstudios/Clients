@@ -16,6 +16,12 @@ const FONT_NAMES = {
   Gestura: 'Gestura',
 };
 
+const PREVIEW_FPS = 30;
+const TEXT_ENTRANCE_DELAY_FRAMES = 10;
+const TEXT_ENTRANCE_DURATION_FRAMES = 10;
+const WORD_STAGGER_FRAMES = 3;
+const TEXT_RISE_PX = 50;
+
 const state = {
   mode: 'text',
   x: 50,
@@ -36,6 +42,9 @@ const state = {
   templateReady: false,
   closingLogo: true,
   closingLogoAvailable: false,
+  wordByWord: false,
+  loopRestarting: false,
+  previewAudioUnlocked: false,
   raf: null,
 };
 
@@ -43,6 +52,9 @@ const stage = $('stage');
 const object = $('object');
 const objectContent = $('objectContent');
 const editableText = $('editableText');
+const animatedText = $('animatedText');
+const textContentEditor = $('textContentEditor');
+const wordByWordToggle = $('wordByWordToggle');
 const bgVideo = $('bgVideo');
 const fgVideo = $('fgVideo');
 const fg2Video = $('fg2Video');
@@ -238,6 +250,154 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
 }
 
+
+function textEntranceAt(time, wordIndex = 0) {
+  const frame = Math.max(0, Number(time) || 0) * PREVIEW_FPS;
+  const stagger = state.wordByWord ? Math.max(0, wordIndex) * WORD_STAGGER_FRAMES : 0;
+  const start = TEXT_ENTRANCE_DELAY_FRAMES + stagger;
+  if (frame + 1e-7 < start) return { visible: false, offset: TEXT_RISE_PX };
+  const p = Math.min(1, Math.max(0, (frame - start) / TEXT_ENTRANCE_DURATION_FRAMES));
+  // Exact cubic-bezier(0,0,0,1): x=u^3, y=3u^2-2u^3.
+  const u = Math.cbrt(p);
+  const eased = 3 * u * u - 2 * p;
+  return { visible: true, offset: TEXT_RISE_PX * (1 - eased) };
+}
+
+function annotateWordIndexes(chars) {
+  let wordIndex = -1;
+  let inWord = false;
+  return chars.map((item) => {
+    if (item.ch === '\n' || /\s/.test(item.ch)) {
+      inWord = false;
+      return { ...item, wordIndex: null };
+    }
+    if (!inWord) { wordIndex += 1; inWord = true; }
+    return { ...item, wordIndex };
+  });
+}
+
+function appendStyledChars(parent, chars) {
+  let run = null;
+  let runFont = null;
+  const flush = () => {
+    if (!run || !run.textContent) return;
+    parent.appendChild(run);
+    run = null;
+    runFont = null;
+  };
+  for (const item of chars) {
+    if (item.ch === '\n') {
+      flush();
+      parent.appendChild(document.createElement('br'));
+      continue;
+    }
+    const font = FONT_NAMES[item.font] || FONT_NAMES.EzerSemiBold;
+    if (!run || runFont !== font) {
+      flush();
+      run = document.createElement('span');
+      run.style.fontFamily = font;
+      runFont = font;
+    }
+    run.textContent += item.ch;
+  }
+  flush();
+}
+
+function setEditableTextFromChars(chars) {
+  editableText.replaceChildren();
+  if (!chars.length) {
+    const span = document.createElement('span');
+    span.style.fontFamily = FONT_NAMES.EzerSemiBold;
+    span.appendChild(document.createElement('br'));
+    editableText.appendChild(span);
+    return;
+  }
+  appendStyledChars(editableText, chars);
+}
+
+function syncTextEditorFromModel() {
+  if (!textContentEditor) return;
+  const plain = extractStyledChars(false).map((item) => item.ch).join('');
+  if (textContentEditor.value !== plain) textContentEditor.value = plain;
+}
+
+function syncAnimatedTextModel() {
+  if (!animatedText) return;
+  const chars = annotateWordIndexes(extractStyledChars(false));
+  animatedText.replaceChildren();
+  let i = 0;
+  while (i < chars.length) {
+    const item = chars[i];
+    if (item.ch === '\n') {
+      animatedText.appendChild(document.createElement('br'));
+      i += 1;
+      continue;
+    }
+    if (/\s/.test(item.ch)) {
+      const spaces = [];
+      while (i < chars.length && chars[i].ch !== '\n' && /\s/.test(chars[i].ch)) spaces.push(chars[i++]);
+      const space = document.createElement('span');
+      space.className = 'motion-space';
+      appendStyledChars(space, spaces);
+      animatedText.appendChild(space);
+      continue;
+    }
+    const wordIndex = item.wordIndex ?? 0;
+    const wordChars = [];
+    while (i < chars.length && chars[i].ch !== '\n' && !/\s/.test(chars[i].ch)) wordChars.push(chars[i++]);
+    const word = document.createElement('span');
+    word.className = 'motion-word';
+    word.dataset.wordIndex = String(wordIndex);
+    appendStyledChars(word, wordChars);
+    animatedText.appendChild(word);
+  }
+  syncTextEditorFromModel();
+}
+
+function updateTextEntrancePreview(time) {
+  if (!animatedText || state.mode !== 'text' || state.editing) return;
+  const unit = stage.clientWidth / 1080;
+  const words = animatedText.querySelectorAll('.motion-word');
+  if (!state.wordByWord) {
+    const motion = textEntranceAt(time, 0);
+    animatedText.style.visibility = motion.visible ? 'visible' : 'hidden';
+    animatedText.style.transform = `translateY(${motion.offset * unit}px)`;
+    words.forEach((word) => { word.style.visibility = 'visible'; word.style.transform = 'translateY(0)'; });
+    return;
+  }
+  animatedText.style.visibility = 'visible';
+  animatedText.style.transform = 'translateY(0)';
+  words.forEach((word) => {
+    const motion = textEntranceAt(time, Number(word.dataset.wordIndex) || 0);
+    word.style.visibility = motion.visible ? 'visible' : 'hidden';
+    word.style.transform = `translateY(${motion.offset * unit}px)`;
+  });
+}
+
+function reconcileExternalText(nextValue) {
+  const next = String(nextValue ?? '').replace(/\r\n?/g, '\n');
+  const oldChars = extractStyledChars(false);
+  const old = oldChars.map((item) => item.ch).join('');
+  if (next === old) return;
+
+  let prefix = 0;
+  while (prefix < old.length && prefix < next.length && old[prefix] === next[prefix]) prefix += 1;
+  let suffix = 0;
+  while (
+    suffix < old.length - prefix && suffix < next.length - prefix &&
+    old[old.length - 1 - suffix] === next[next.length - 1 - suffix]
+  ) suffix += 1;
+
+  const before = oldChars.slice(0, prefix);
+  const after = suffix ? oldChars.slice(oldChars.length - suffix) : [];
+  const inheritedFont = before.at(-1)?.font || oldChars[prefix]?.font || after[0]?.font || 'EzerSemiBold';
+  const inserted = [...next.slice(prefix, next.length - suffix)].map((ch) => ({ ch, font: inheritedFont }));
+  setEditableTextFromChars([...before, ...inserted, ...after]);
+  savedTextRange = null;
+  syncAnimatedTextModel();
+  applyVisualState(Number($('timeline').value) || 0);
+}
+
 function updateStageUnit() {
   const unit = stage.clientWidth / 1080;
   stage.style.setProperty('--stage-unit', `${unit}px`);
@@ -255,11 +415,15 @@ function applyVisualState(time = bgVideo.currentTime || 0) {
   object.style.transform = `translate(-50%, -50%) scale(${animatedScaleAt(time)})`;
 
   const unit = stage.clientWidth / 1080;
-  editableText.style.fontSize = `${state.fontSize * unit}px`;
-  editableText.style.color = state.color;
-  editableText.style.letterSpacing = `${state.tracking * unit}px`;
-  editableText.style.lineHeight = `${state.lineHeight / 100}`;
-  editableText.style.textAlign = state.align;
+  for (const textLayer of [editableText, animatedText]) {
+    if (!textLayer) continue;
+    textLayer.style.fontSize = `${state.fontSize * unit}px`;
+    textLayer.style.color = state.color;
+    textLayer.style.letterSpacing = `${state.tracking * unit}px`;
+    textLayer.style.lineHeight = `${state.lineHeight / 100}`;
+    textLayer.style.textAlign = state.align;
+  }
+  updateTextEntrancePreview(time);
 
   $('xField').value = Number(state.x.toFixed(1));
   $('yField').value = Number(state.y.toFixed(1));
@@ -277,6 +441,8 @@ function setMode(mode) {
   $('textInspector').classList.toggle('is-hidden', !text);
   $('mediaInspector').classList.toggle('is-hidden', text);
   editableText.classList.toggle('is-hidden', !text);
+  animatedText?.classList.toggle('is-hidden', !text);
+  document.querySelector('.word-by-word-row')?.classList.toggle('is-hidden', !text);
   if (!text) exitTextEdit();
   updateMediaVisibility();
   object.dataset.mode = mode;
@@ -295,6 +461,7 @@ function updateMediaVisibility() {
 
 function enterTextEdit(restoreSelection = false) {
   if (state.mode !== 'text') return;
+  if (!previewMasterVideo.paused) pausePreview();
   state.editing = true;
   object.classList.add('is-editing', 'is-selected');
   editableText.contentEditable = 'true';
@@ -317,6 +484,8 @@ function exitTextEdit() {
   object.classList.remove('is-editing');
   editableText.contentEditable = 'false';
   window.getSelection()?.removeAllRanges();
+  syncAnimatedTextModel();
+  applyVisualState(Number($('timeline').value) || 0);
 }
 
 function applyFontToSelection(fontKey) {
@@ -337,6 +506,7 @@ function applyFontToSelection(fontKey) {
       const nextRange = document.createRange();
       nextRange.selectNodeContents(span);
       savedTextRange = nextRange;
+      syncAnimatedTextModel();
       return;
     } catch (_) {}
   }
@@ -352,6 +522,7 @@ function applyFontToSelection(fontKey) {
     document.execCommand('fontName', false, family);
     const current = window.getSelection();
     if (current?.rangeCount && editableText.contains(current.anchorNode)) savedTextRange = current.getRangeAt(0).cloneRange();
+    syncAnimatedTextModel();
   } catch (_) {}
 }
 
@@ -371,6 +542,12 @@ function updateActiveFontFromSelection() {
 }
 
 $('fontSelect').addEventListener('change', (e) => applyFontToSelection(e.target.value));
+textContentEditor?.addEventListener('input', (e) => reconcileExternalText(e.target.value));
+wordByWordToggle?.addEventListener('change', (e) => {
+  state.wordByWord = !!e.target.checked;
+  syncAnimatedTextModel();
+  applyVisualState(Number($('timeline').value) || 0);
+});
 document.addEventListener('selectionchange', () => {
   updateActiveFontFromSelection();
   if (mobileQuery.matches && state.editing) refreshMobileSelectionToolbarFromSelection();
@@ -448,6 +625,8 @@ $('mobileWidthRange')?.addEventListener('input', (e) => {
 
 editableText.addEventListener('input', () => {
   if (!editableText.innerText.trim()) editableText.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
+  syncTextEditorFromModel();
+  syncAnimatedTextModel();
 });
 editableText.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); exitTextEdit(); stage.focus(); }
@@ -732,7 +911,11 @@ async function initTemplate() {
     $('exportButton').disabled = false;
     $('timeTotal').textContent = formatTime(state.duration);
     fgVideo.muted = true;
+    // Autoplay previews start muted to satisfy mobile/browser autoplay policy.
+    // The first user gesture restores background preview audio; export audio is unaffected.
+    bgVideo.muted = !state.previewAudioUnlocked;
     syncAt(0);
+    requestAnimationFrame(() => playPreview({ preserveUi: true }));
   } catch (_) {
     state.templateReady = false;
   }
@@ -768,10 +951,12 @@ $('timeline').addEventListener('input', (e) => {
 });
 $('playPause').addEventListener('click', () => previewMasterVideo.paused ? playPreview() : pausePreview());
 
-async function playPreview() {
+async function playPreview({ preserveUi = false } = {}) {
   if (!state.templateReady) return;
-  closeMobileInspector();
-  object.classList.remove('is-selected');
+  if (!preserveUi) {
+    closeMobileInspector();
+    object.classList.remove('is-selected');
+  }
   let current = Number($('timeline').value) || 0;
   if (current >= state.duration - .02) { syncAt(0); current = 0; }
   setVideoTime(bgVideo, current);
@@ -794,6 +979,17 @@ function pausePreview() {
   cancelAnimationFrame(state.raf);
   $('playGlyph').innerHTML = '<path d="m7 5 8 5-8 5z"/>';
 }
+
+function restartPreviewLoop() {
+  if (!state.templateReady || state.loopRestarting) return;
+  state.loopRestarting = true;
+  pausePreview();
+  syncAt(0);
+  requestAnimationFrame(async () => {
+    state.loopRestarting = false;
+    await playPreview({ preserveUi: true });
+  });
+}
 function tickPreview() {
   if (previewMasterVideo.paused) return;
   const t = previewMasterVideo.currentTime;
@@ -812,16 +1008,29 @@ function tickPreview() {
     if (Math.abs(mediaVideo.currentTime - mt) > .1) setVideoTime(mediaVideo, mt);
   }
   applyVisualState(t);
-  if (t >= state.duration - .015) { pausePreview(); syncAt(0); return; }
+  if (t >= state.duration - .015) { restartPreviewLoop(); return; }
   state.raf = requestAnimationFrame(tickPreview);
 }
+
+for (const video of [bgVideo, fgVideo, fg2Video]) {
+  video.addEventListener('ended', () => {
+    if (video === previewMasterVideo && state.templateReady) restartPreviewLoop();
+  });
+}
+
+function unlockPreviewAudio() {
+  state.previewAudioUnlocked = true;
+  bgVideo.muted = false;
+}
+document.addEventListener('pointerdown', unlockPreviewAudio, { once: true, capture: true });
+document.addEventListener('keydown', unlockPreviewAudio, { once: true, capture: true });
 
 // Rich text extraction for canvas rendering.
 function fontKeyForElement(el) {
   const family = getComputedStyle(el).fontFamily.replace(/["']/g, '');
   return Object.keys(FONT_NAMES).find((k) => family.includes(FONT_NAMES[k])) || 'EzerSemiBold';
 }
-function extractStyledChars() {
+function extractStyledChars(includeFallback = true) {
   const chars = [];
   const walk = (node) => {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -836,7 +1045,7 @@ function extractStyledChars() {
   };
   walk(editableText);
   while (chars.length && chars[chars.length - 1].ch === '\n') chars.pop();
-  return chars.length ? chars : [{ ch: ' ', font: 'EzerSemiBold' }];
+  return chars.length ? chars : (includeFallback ? [{ ch: ' ', font: 'EzerSemiBold' }] : []);
 }
 
 function fontString(key, px) { return `${px}px "${FONT_NAMES[key] || FONT_NAMES.EzerSemiBold}"`; }
@@ -870,13 +1079,14 @@ function layoutText(ctx, chars) {
   return lines;
 }
 function drawTextLayer(ctx, time) {
-  const chars = extractStyledChars();
+  const chars = annotateWordIndexes(extractStyledChars());
   const lines = layoutText(ctx, chars);
   const linePx = state.fontSize * state.lineHeight / 100;
   const totalHeight = linePx * lines.length;
   const s = animatedScaleAt(time);
   ctx.save();
   ctx.translate(1080 * state.x / 100, 1920 * state.y / 100);
+  // The existing automatic scale remains a single uniform layer transform.
   ctx.scale(s, s);
   ctx.fillStyle = state.color;
   ctx.textBaseline = 'alphabetic';
@@ -888,13 +1098,18 @@ function drawTextLayer(ctx, time) {
     else x = -line.width / 2;
     for (const item of line.chars) {
       ctx.font = fontString(item.font, state.fontSize);
-      ctx.fillText(item.ch, x, y);
-      x += ctx.measureText(item.ch).width + state.tracking;
+      const measured = ctx.measureText(item.ch).width;
+      if (!/\s/.test(item.ch)) {
+        const motion = textEntranceAt(time, state.wordByWord ? (item.wordIndex ?? 0) : 0);
+        if (motion.visible) ctx.fillText(item.ch, x, y + motion.offset);
+      }
+      x += measured + state.tracking;
     }
     y += linePx;
   }
   ctx.restore();
 }
+
 function drawMediaLayer(ctx, source, time) {
   if (!source) return;
   const ratio = state.mediaRatio || (source.width && source.height ? source.width / source.height : 1);
@@ -1200,6 +1415,8 @@ window.addEventListener('resize', updateStageUnit);
 window.addEventListener('orientationchange', () => setTimeout(updateStageUnit, 120));
 setMode('text');
 setColor('#F3F3F3');
+syncAnimatedTextModel();
+if (wordByWordToggle) wordByWordToggle.checked = state.wordByWord;
 applyVisualState(0);
 initTemplate();
 

@@ -57,6 +57,11 @@
           </div>
 
           <div class="control-stack">
+            <label class="text-copy-control" for="textContentEditor">
+              <span class="control-label">Text</span>
+              <textarea id="textContentEditor" rows="3" spellcheck="true" aria-label="Text content">Meet your new Toolbox</textarea>
+            </label>
+
             <label class="control-label" for="fontSelect">Font <span>selection</span></label>
             <div class="select-shell">
               <select id="fontSelect">
@@ -121,6 +126,11 @@
 
         <section class="inspector-section template-section">
           <div class="section-title">Options</div>
+          <label class="control-toggle-row word-by-word-row" for="wordByWordToggle">
+            <span>Word by word</span>
+            <input id="wordByWordToggle" type="checkbox" />
+            <span class="toggle-switch" aria-hidden="true"></span>
+          </label>
           <label class="control-toggle-row" for="closingLogoToggle">
             <span>Closing logo</span>
             <input id="closingLogoToggle" type="checkbox" checked />
@@ -172,7 +182,8 @@
 
             <div id="object" class="editor-object is-selected" data-mode="text">
               <div id="objectContent" class="object-content">
-                <div id="editableText" class="editable-text" contenteditable="false" spellcheck="false"><span style="font-family:EzerSemiBold">Meet your new </span><span style="font-family:Gestura">Toolbox</span></div>
+                <div id="editableText" class="editable-text editable-text-model" contenteditable="false" spellcheck="false"><span style="font-family:EzerSemiBold">Meet your new </span><span style="font-family:Gestura">Toolbox</span></div>
+                <div id="animatedText" class="editable-text animated-text" aria-hidden="true"></div>
                 <img id="mediaImage" class="media-preview is-hidden" alt="Uploaded media" />
                 <video id="mediaVideo" class="media-preview is-hidden" playsinline muted preload="metadata"></video>
               </div>
