@@ -1,37 +1,29 @@
 # Toolbox Composer
 
-Static GitHub Pages video composer.
+Static GitHub Pages video compositor.
 
 ## Required assets
 Place these files in `assets/`:
 
 - `bg.webm`
-- `fg.webm` — transparent foreground
-- `fg2.webm` — transparent closing-logo overlay
-- `pitaro-symbol.svg` — page/header symbol
+- `fg.webm`
+- `fg2.webm` — closing logo overlay
+- `pitaro-symbol.svg` — page logo
 
-Fonts are included under `assets/fonts/`.
+The bundled fonts are already under `assets/fonts/`.
 
-The composition duration is the longest of `bg.webm`, `fg.webm`, and `fg2.webm`. Export audio comes only from `bg.webm`. `Closing logo` is enabled by default.
+## Current behavior
 
-## Text motion
+- 1080 × 1920 composition, 30 fps MP4 export.
+- Composition duration is the longest of `bg.webm`, `fg.webm`, and `fg2.webm`.
+- Layer order: background → editable text/media → foreground → optional closing logo.
+- Closing logo is enabled by default.
+- Preview autoplays muted when required by browser policy and loops by default; the first user gesture restores background preview audio.
+- Export audio comes only from `bg.webm`.
+- Text starts on frame 10 at +50 px Y and rises to its final position over 10 frames using `cubic-bezier(0, 0.5, 0, 1)`. There is no opacity animation.
+- `Word by word` starts each subsequent word 3 frames after the previous word, using the same position animation.
+- The existing 2%/second automatic scale remains one uniform transform on the complete editable layer.
+- The inspector contains a synchronized rich-text editor, so copy and per-selection fonts can be edited even while the animated preview text is not yet visible.
 
-- Preview autoplays and loops by default.
-- Text is hidden for the first 10 frames.
-- On frame 10 the full sentence becomes visible at the exact same moment its movement starts, 50 px below its final position.
-- It rises into place over 10 frames with `cubic-bezier(0,0.5,0,1)`.
-- There is no entrance opacity animation.
-- `Word by word` staggers each word by 3 frames while keeping the same position animation.
-- The existing automatic scale animation remains one uniform transform for the complete text layer.
-
-The Typography panel contains a true rich-text editor using the same Ezer/Gestura font runs and text styling as the composition. Select characters or words there and use the same font controls; changes update the canvas and export model in real time, including while frames 0–9 are hidden.
-
-## Mobile text styling
-Tap **Edit text**, select characters, and use the floating typography toolbar above the keyboard. Font changes and size steps preserve the selection; **More** opens the full typography panel.
-
-## Deploy
-Upload the folder contents to a GitHub repository and enable GitHub Pages for the repository root.
-
-
-## Loading
-The required background/foreground metadata enables the editor first. The optional `fg2.webm` metadata loads in parallel and no longer blocks the main UI. Template videos use metadata-first preload to reduce initial startup work.
+## GitHub Pages
+Upload the project contents to a repository and enable GitHub Pages from the repository root. No build step is required.

@@ -21,6 +21,7 @@ const TEXT_ENTRANCE_DELAY_FRAMES = 10;
 const TEXT_ENTRANCE_DURATION_FRAMES = 10;
 const WORD_STAGGER_FRAMES = 3;
 const TEXT_RISE_PX = 50;
+const TEXT_ENTRANCE_START = TEXT_ENTRANCE_DELAY_FRAMES / PREVIEW_FPS;
 
 const state = {
   mode: 'text',
@@ -43,8 +44,8 @@ const state = {
   closingLogo: true,
   closingLogoAvailable: false,
   wordByWord: false,
-  loopRestarting: false,
   previewAudioUnlocked: false,
+  lastPreviewTime: 0,
   raf: null,
 };
 
@@ -84,7 +85,7 @@ const mobileQuery = window.matchMedia('(max-width: 760px)');
 let savedTextRange = null;
 let savedTextRoot = editableText;
 let activeTextEditor = editableText;
-let syncingFromSideEditor = false;
+let syncingRichEditors = false;
 let pendingExport = null;
 let previewMasterVideo = bgVideo;
 
@@ -106,10 +107,10 @@ function textEditorContainingNode(node) {
 
 function savedSelectionIsUsable() {
   if (!savedTextRange || savedTextRange.collapsed || !savedTextRoot) return false;
-  const root = savedTextRange.commonAncestorContainer?.nodeType === Node.TEXT_NODE
+  const common = savedTextRange.commonAncestorContainer?.nodeType === Node.TEXT_NODE
     ? savedTextRange.commonAncestorContainer.parentElement
     : savedTextRange.commonAncestorContainer;
-  return !!root && (root === savedTextRoot || savedTextRoot.contains(root));
+  return !!common && (common === savedTextRoot || savedTextRoot.contains(common));
 }
 
 function setMobileFontUi(fontKey) {
@@ -179,13 +180,16 @@ function refreshMobileSelectionToolbarFromSelection() {
   const sel = window.getSelection();
   const root = sel?.anchorNode ? textEditorContainingNode(sel.anchorNode) : null;
   if (sel?.rangeCount && root) {
-    savedTextRoot = root;
     activeTextEditor = root;
+    savedTextRoot = root;
+    if (sel.isCollapsed) {
+      // Keep the last real selection while a toolbar/select control temporarily steals focus.
+      if (document.activeElement === root) savedTextRange = null;
+      return hideMobileSelectionToolbar();
+    }
     savedTextRange = sel.getRangeAt(0).cloneRange();
-    if (sel.isCollapsed) return hideMobileSelectionToolbar();
     return showMobileSelectionToolbar();
   }
-  // Controls in the floating toolbar may temporarily own focus; keep using the saved range.
   if (savedSelectionIsUsable()) showMobileSelectionToolbar();
 }
 
@@ -264,22 +268,20 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
 }
 
+function cubicBezier00501(progress) {
+  const p = Math.min(1, Math.max(0, Number(progress) || 0));
+  const u = Math.cbrt(p); // x(u) = u^3 for cubic-bezier(0,.5,0,1)
+  return 1.5 * u - 0.5 * p;
+}
 
 function textEntranceAt(time, wordIndex = 0) {
   const frame = Math.max(0, Number(time) || 0) * PREVIEW_FPS;
   const stagger = state.wordByWord ? Math.max(0, wordIndex) * WORD_STAGGER_FRAMES : 0;
-  const start = TEXT_ENTRANCE_DELAY_FRAMES + stagger;
-  if (frame + 1e-7 < start) return { visible: false, offset: TEXT_RISE_PX };
-
-  // In whole-sentence mode, the first visible frame is already moving rather
-  // than showing one stationary frame at the +50 px start position.
-  const motionFrame = (frame - start) + (state.wordByWord ? 0 : 1);
-  const p = Math.min(1, Math.max(0, motionFrame / TEXT_ENTRANCE_DURATION_FRAMES));
-
-  // Exact cubic-bezier(0,0.5,0,1). Because x(u)=u^3, u=cuberoot(p),
-  // and y(u)=1.5u - 0.5u^3.
-  const u = Math.cbrt(p);
-  const eased = 1.5 * u - 0.5 * p;
+  const startFrame = TEXT_ENTRANCE_DELAY_FRAMES + stagger;
+  // Frames before the start keyframe are not rendered at all. No opacity animation.
+  if (frame + 1e-6 < startFrame) return { visible: false, offset: TEXT_RISE_PX };
+  const progress = (frame - startFrame) / TEXT_ENTRANCE_DURATION_FRAMES;
+  const eased = cubicBezier00501(progress);
   return { visible: true, offset: TEXT_RISE_PX * (1 - eased) };
 }
 
@@ -300,8 +302,7 @@ function appendStyledChars(parent, chars) {
   let run = null;
   let runFont = null;
   const flush = () => {
-    if (!run || !run.textContent) return;
-    parent.appendChild(run);
+    if (run && run.textContent) parent.appendChild(run);
     run = null;
     runFont = null;
   };
@@ -311,53 +312,46 @@ function appendStyledChars(parent, chars) {
       parent.appendChild(document.createElement('br'));
       continue;
     }
-    const font = FONT_NAMES[item.font] || FONT_NAMES.EzerSemiBold;
-    if (!run || runFont !== font) {
+    const family = FONT_NAMES[item.font] || FONT_NAMES.EzerSemiBold;
+    if (!run || runFont !== family) {
       flush();
       run = document.createElement('span');
-      run.style.fontFamily = font;
-      runFont = font;
+      run.style.fontFamily = family;
+      runFont = family;
     }
     run.textContent += item.ch;
   }
   flush();
 }
 
-function setEditableTextFromChars(chars) {
-  editableText.replaceChildren();
-  if (!chars.length) {
-    const span = document.createElement('span');
-    span.style.fontFamily = FONT_NAMES.EzerSemiBold;
-    span.appendChild(document.createElement('br'));
-    editableText.appendChild(span);
-    return;
+function ensureTextModelNotEmpty() {
+  if (!editableText.textContent && !editableText.querySelector('br')) {
+    editableText.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
   }
-  appendStyledChars(editableText, chars);
 }
 
-function syncTextEditorFromModel(force = false) {
-  if (!textContentEditor) return;
-  // Never replace the DOM while the user is actively selecting/typing in the side editor.
-  if (!force && (syncingFromSideEditor || (activeTextEditor === textContentEditor && document.activeElement === textContentEditor))) return;
-  if (textContentEditor.innerHTML !== editableText.innerHTML) textContentEditor.innerHTML = editableText.innerHTML;
+function syncSideEditorFromModel(force = false) {
+  if (!textContentEditor || syncingRichEditors) return;
+  if (!force && activeTextEditor === textContentEditor && document.activeElement === textContentEditor) return;
+  syncingRichEditors = true;
+  try { textContentEditor.innerHTML = editableText.innerHTML; }
+  finally { syncingRichEditors = false; }
 }
 
-function syncCanvasModelFromSideEditor() {
-  if (!textContentEditor) return;
-  syncingFromSideEditor = true;
+function syncModelFromSideEditor() {
+  if (!textContentEditor || syncingRichEditors) return;
+  syncingRichEditors = true;
   try {
-    const chars = extractStyledChars(false, textContentEditor);
-    setEditableTextFromChars(chars);
-    syncAnimatedTextModel();
-    applyVisualState(Number($('timeline').value) || 0);
-  } finally {
-    syncingFromSideEditor = false;
-  }
+    editableText.innerHTML = textContentEditor.innerHTML;
+    ensureTextModelNotEmpty();
+  } finally { syncingRichEditors = false; }
+  syncAnimatedTextModel();
+  applyVisualState(Number($('timeline').value) || 0);
 }
 
 function syncAnimatedTextModel() {
   if (!animatedText) return;
-  const chars = annotateWordIndexes(extractStyledChars(false));
+  const chars = annotateWordIndexes(extractStyledChars(false, editableText));
   animatedText.replaceChildren();
   let i = 0;
   while (i < chars.length) {
@@ -370,10 +364,10 @@ function syncAnimatedTextModel() {
     if (/\s/.test(item.ch)) {
       const spaces = [];
       while (i < chars.length && chars[i].ch !== '\n' && /\s/.test(chars[i].ch)) spaces.push(chars[i++]);
-      const space = document.createElement('span');
-      space.className = 'motion-space';
-      appendStyledChars(space, spaces);
-      animatedText.appendChild(space);
+      const span = document.createElement('span');
+      span.className = 'motion-space';
+      appendStyledChars(span, spaces);
+      animatedText.appendChild(span);
       continue;
     }
     const wordIndex = item.wordIndex ?? 0;
@@ -385,7 +379,6 @@ function syncAnimatedTextModel() {
     appendStyledChars(word, wordChars);
     animatedText.appendChild(word);
   }
-  syncTextEditorFromModel();
 }
 
 function updateTextEntrancePreview(time) {
@@ -394,16 +387,15 @@ function updateTextEntrancePreview(time) {
   const words = animatedText.querySelectorAll('.motion-word');
   if (!state.wordByWord) {
     const motion = textEntranceAt(time, 0);
-    // The class is an authoritative guard: no other inline/editor state can make
-    // the sentence visible before its entrance frame.
-    animatedText.classList.toggle('entrance-hidden', !motion.visible);
-    animatedText.style.visibility = motion.visible ? 'visible' : 'hidden';
+    animatedText.classList.toggle('motion-hidden', !motion.visible);
     animatedText.style.transform = `translateY(${motion.offset * unit}px)`;
-    words.forEach((word) => { word.style.visibility = 'visible'; word.style.transform = 'translateY(0)'; });
+    words.forEach((word) => {
+      word.style.visibility = 'visible';
+      word.style.transform = 'translateY(0)';
+    });
     return;
   }
-  animatedText.classList.remove('entrance-hidden');
-  animatedText.style.visibility = 'visible';
+  animatedText.classList.remove('motion-hidden');
   animatedText.style.transform = 'translateY(0)';
   words.forEach((word) => {
     const motion = textEntranceAt(time, Number(word.dataset.wordIndex) || 0);
@@ -412,59 +404,34 @@ function updateTextEntrancePreview(time) {
   });
 }
 
-function reconcileExternalText(nextValue) {
-  const next = String(nextValue ?? '').replace(/\r\n?/g, '\n');
-  const oldChars = extractStyledChars(false);
-  const old = oldChars.map((item) => item.ch).join('');
-  if (next === old) return;
-
-  let prefix = 0;
-  while (prefix < old.length && prefix < next.length && old[prefix] === next[prefix]) prefix += 1;
-  let suffix = 0;
-  while (
-    suffix < old.length - prefix && suffix < next.length - prefix &&
-    old[old.length - 1 - suffix] === next[next.length - 1 - suffix]
-  ) suffix += 1;
-
-  const before = oldChars.slice(0, prefix);
-  const after = suffix ? oldChars.slice(oldChars.length - suffix) : [];
-  const inheritedFont = before.at(-1)?.font || oldChars[prefix]?.font || after[0]?.font || 'EzerSemiBold';
-  const inserted = [...next.slice(prefix, next.length - suffix)].map((ch) => ({ ch, font: inheritedFont }));
-  setEditableTextFromChars([...before, ...inserted, ...after]);
-  savedTextRange = null;
-  syncAnimatedTextModel();
-  applyVisualState(Number($('timeline').value) || 0);
-}
-
 function updateStageUnit() {
   const unit = stage.clientWidth / 1080;
   stage.style.setProperty('--stage-unit', `${unit}px`);
-  applyVisualState();
+  applyVisualState(Number($('timeline').value) || 0);
 }
 
 function animatedScaleAt(t) {
   return Math.max(0.1, (state.scale / 100) * (1 - 0.02 * Math.max(0, t)));
 }
 
-function applyVisualState(time = bgVideo.currentTime || 0) {
+function applyVisualState(time = Number($('timeline').value) || 0) {
   object.style.left = `${state.x}%`;
   object.style.top = `${state.y}%`;
   object.style.width = `${(state.width / 1080) * 100}%`;
+  // The automatic scale is a single parent transform, so word staggering never changes scale per word.
   object.style.transform = `translate(-50%, -50%) scale(${animatedScaleAt(time)})`;
 
   const unit = stage.clientWidth / 1080;
-  for (const textLayer of [editableText, animatedText]) {
-    if (!textLayer) continue;
-    textLayer.style.fontSize = `${state.fontSize * unit}px`;
-    textLayer.style.color = state.color;
-    textLayer.style.letterSpacing = `${state.tracking * unit}px`;
-    textLayer.style.lineHeight = `${state.lineHeight / 100}`;
-    textLayer.style.textAlign = state.align;
+  for (const layer of [editableText, animatedText]) {
+    if (!layer) continue;
+    layer.style.fontSize = `${state.fontSize * unit}px`;
+    layer.style.color = state.color;
+    layer.style.letterSpacing = `${state.tracking * unit}px`;
+    layer.style.lineHeight = `${state.lineHeight / 100}`;
+    layer.style.textAlign = state.align;
   }
   if (textContentEditor) {
-    // A compact preview of the same typography: exact font runs/color/alignment,
-    // scaled down only so an 80px composition font remains usable in the inspector.
-    const sideScale = Math.min(0.48, Math.max(0.28, 34 / Math.max(16, state.fontSize)));
+    const sideScale = Math.min(0.44, Math.max(0.26, 32 / Math.max(16, state.fontSize)));
     textContentEditor.style.fontSize = `${state.fontSize * sideScale}px`;
     textContentEditor.style.color = state.color;
     textContentEditor.style.letterSpacing = `${state.tracking * sideScale}px`;
@@ -510,6 +477,9 @@ function updateMediaVisibility() {
 function enterTextEdit(restoreSelection = false) {
   if (state.mode !== 'text') return;
   if (!previewMasterVideo.paused) pausePreview();
+  // Direct canvas editing always happens at/after the entrance frame; the external editor works at any time.
+  const now = Number($('timeline').value) || 0;
+  if (now < TEXT_ENTRANCE_START) syncAt(TEXT_ENTRANCE_START);
   state.editing = true;
   activeTextEditor = editableText;
   savedTextRoot = editableText;
@@ -529,21 +499,24 @@ function enterTextEdit(restoreSelection = false) {
 }
 
 function exitTextEdit() {
+  if (!state.editing) return;
   state.editing = false;
   hideMobileSelectionToolbar();
   object.classList.remove('is-editing');
   editableText.contentEditable = 'false';
   window.getSelection()?.removeAllRanges();
+  syncSideEditorFromModel();
   syncAnimatedTextModel();
   applyVisualState(Number($('timeline').value) || 0);
 }
 
 function syncAfterRichTextMutation(root) {
   if (root === textContentEditor) {
-    syncCanvasModelFromSideEditor();
+    syncModelFromSideEditor();
   } else {
+    ensureTextModelNotEmpty();
+    syncSideEditorFromModel();
     syncAnimatedTextModel();
-    syncTextEditorFromModel();
     applyVisualState(Number($('timeline').value) || 0);
   }
 }
@@ -552,8 +525,6 @@ function applyFontToSelection(fontKey) {
   if (state.mode !== 'text') return;
   const family = FONT_NAMES[fontKey] || FONT_NAMES.EzerSemiBold;
 
-  // Use the saved Range directly. This works for both the canvas editor and the
-  // inspector rich-text editor, and prevents dropdown focus from destroying selection.
   if (savedSelectionIsUsable()) {
     try {
       const root = savedTextRoot;
@@ -562,6 +533,7 @@ function applyFontToSelection(fontKey) {
       const span = document.createElement('span');
       span.style.fontFamily = family;
       span.appendChild(fragment);
+      // Font selection replaces inherited font-family but keeps other inline content.
       span.querySelectorAll('[style]').forEach((el) => {
         if (el.style.fontFamily) el.style.removeProperty('font-family');
       });
@@ -569,23 +541,22 @@ function applyFontToSelection(fontKey) {
       const nextRange = document.createRange();
       nextRange.selectNodeContents(span);
       savedTextRange = nextRange;
-      savedTextRoot = root;
       activeTextEditor = root;
       syncAfterRichTextMutation(root);
       return;
     } catch (_) {}
   }
 
-  // No selection: keep the familiar canvas edit fallback.
+  // With no selection, retain the original canvas-edit fallback.
   if (!state.editing) enterTextEdit(false);
   editableText.focus({ preventScroll: true });
   try {
     document.execCommand('styleWithCSS', false, true);
     document.execCommand('fontName', false, family);
-    const current = window.getSelection();
-    if (current?.rangeCount && textEditorContainingNode(current.anchorNode)) {
-      savedTextRoot = textEditorContainingNode(current.anchorNode);
-      savedTextRange = current.getRangeAt(0).cloneRange();
+    const sel = window.getSelection();
+    if (sel?.rangeCount && textEditorContainingNode(sel.anchorNode)) {
+      savedTextRoot = textEditorContainingNode(sel.anchorNode);
+      savedTextRange = sel.getRangeAt(0).cloneRange();
     }
     syncAfterRichTextMutation(editableText);
   } catch (_) {}
@@ -593,12 +564,11 @@ function applyFontToSelection(fontKey) {
 
 function updateActiveFontFromSelection() {
   const sel = window.getSelection();
-  if (!sel || !sel.anchorNode) return;
-  const root = textEditorContainingNode(sel.anchorNode);
-  if (!root) return;
+  const root = sel?.anchorNode ? textEditorContainingNode(sel.anchorNode) : null;
+  if (!sel || !root) return;
   activeTextEditor = root;
   savedTextRoot = root;
-  if (sel.rangeCount) savedTextRange = sel.getRangeAt(0).cloneRange();
+  if (sel.rangeCount && !sel.isCollapsed) savedTextRange = sel.getRangeAt(0).cloneRange();
   const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
   if (!el) return;
   const family = getComputedStyle(el).fontFamily.replace(/["']/g, '');
@@ -611,10 +581,8 @@ function updateActiveFontFromSelection() {
 }
 
 $('fontSelect').addEventListener('change', (e) => applyFontToSelection(e.target.value));
-
 wordByWordToggle?.addEventListener('change', (e) => {
   state.wordByWord = !!e.target.checked;
-  syncAnimatedTextModel();
   applyVisualState(Number($('timeline').value) || 0);
 });
 document.addEventListener('selectionchange', () => {
@@ -693,35 +661,14 @@ $('mobileWidthRange')?.addEventListener('input', (e) => {
 });
 
 editableText.addEventListener('input', () => {
-  if (!editableText.innerText.trim()) editableText.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
-  syncTextEditorFromModel();
+  ensureTextModelNotEmpty();
+  syncSideEditorFromModel();
   syncAnimatedTextModel();
+  applyVisualState(Number($('timeline').value) || 0);
 });
-
-textContentEditor?.addEventListener('focus', () => {
-  activeTextEditor = textContentEditor;
-  savedTextRoot = textContentEditor;
-});
-textContentEditor?.addEventListener('input', () => {
-  activeTextEditor = textContentEditor;
-  savedTextRoot = textContentEditor;
-  if (!textContentEditor.innerText.trim()) textContentEditor.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
-  syncCanvasModelFromSideEditor();
-});
-textContentEditor?.addEventListener('pointerup', () => {
-  activeTextEditor = textContentEditor;
-  setTimeout(updateActiveFontFromSelection, 0);
-});
-textContentEditor?.addEventListener('keyup', () => {
-  activeTextEditor = textContentEditor;
-  setTimeout(updateActiveFontFromSelection, 0);
-});
-textContentEditor?.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    textContentEditor.blur();
-    hideMobileSelectionToolbar();
-  }
+editableText.addEventListener('focus', () => {
+  activeTextEditor = editableText;
+  savedTextRoot = editableText;
 });
 editableText.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); exitTextEdit(); stage.focus(); }
@@ -729,15 +676,31 @@ editableText.addEventListener('keydown', (e) => {
 editableText.addEventListener('blur', () => {
   setTimeout(() => {
     const active = document.activeElement;
-    if (active !== $('fontSelect') && !editableText.contains(active) && !mobileSelectionToolbar?.contains(active)) exitTextEdit();
+    if (active !== $('fontSelect') && active !== textContentEditor && !editableText.contains(active) && !mobileSelectionToolbar?.contains(active)) exitTextEdit();
   }, 0);
 });
-
 editableText.addEventListener('pointerup', () => {
   if (mobileQuery.matches && state.editing) setTimeout(refreshMobileSelectionToolbarFromSelection, 0);
 });
 editableText.addEventListener('keyup', () => {
   if (mobileQuery.matches && state.editing) setTimeout(refreshMobileSelectionToolbarFromSelection, 0);
+});
+
+textContentEditor?.addEventListener('focus', () => {
+  activeTextEditor = textContentEditor;
+  savedTextRoot = textContentEditor;
+});
+textContentEditor?.addEventListener('input', () => {
+  if (syncingRichEditors) return;
+  syncModelFromSideEditor();
+});
+textContentEditor?.addEventListener('pointerup', () => setTimeout(refreshMobileSelectionToolbarFromSelection, 0));
+textContentEditor?.addEventListener('keyup', () => setTimeout(refreshMobileSelectionToolbarFromSelection, 0));
+// Keep pasted content clean while preserving the active font at the caret.
+textContentEditor?.addEventListener('paste', (e) => {
+  e.preventDefault();
+  const plain = e.clipboardData?.getData('text/plain') || '';
+  document.execCommand('insertText', false, plain);
 });
 
 // Keep button taps from stealing focus from the contenteditable, so the keyboard and selection stay put.
@@ -961,19 +924,32 @@ function loadMedia(file) {
   setMode('media');
 }
 
-// Template preview.
+// Template preview. Keep the original video-clock architecture; only add native looping/autoplay.
 function refreshTemplateDuration() {
   const candidates = [
     { video: bgVideo, duration: bgVideo.duration },
     { video: fgVideo, duration: fgVideo.duration },
     ...(state.closingLogoAvailable ? [{ video: fg2Video, duration: fg2Video.duration }] : []),
-  ].filter(item => Number.isFinite(item.duration) && item.duration > 0);
+  ].filter((item) => Number.isFinite(item.duration) && item.duration > 0);
   const longest = candidates.reduce((best, item) => !best || item.duration > best.duration ? item : best, null);
   if (!longest) return false;
+
+  const oldMaster = previewMasterVideo;
+  const wasPlaying = state.templateReady && oldMaster && !oldMaster.paused;
+  const current = Number($('timeline').value) || 0;
+
   state.duration = longest.duration;
   previewMasterVideo = longest.video;
+  for (const video of [bgVideo, fgVideo, fg2Video]) video.loop = false;
+  previewMasterVideo.loop = true; // Native master looping is smoother than a pause/seek/play loop.
+
   $('timeline').max = state.duration;
   $('timeTotal').textContent = formatTime(state.duration);
+
+  if (wasPlaying && oldMaster !== previewMasterVideo) {
+    setVideoTime(previewMasterVideo, Math.min(current, state.duration - .001));
+    previewMasterVideo.play().catch(() => {});
+  }
   return true;
 }
 
@@ -987,28 +963,30 @@ function activateTemplateUi() {
   fgVideo.muted = true;
   bgVideo.muted = !state.previewAudioUnlocked;
   syncAt(0);
+  // Autoplay by default. Muted until the first user gesture so mobile browsers allow it.
   requestAnimationFrame(() => playPreview({ preserveUi: true }));
 }
 
 async function initTemplate() {
-  // Metadata-first loading keeps the UI light. The browser starts fetching full
-  // streams only when autoplay/playback actually needs them.
   bgVideo.src = './assets/bg.webm';
   fgVideo.src = './assets/fg.webm';
   fg2Video.src = './assets/fg2.webm';
 
-  // Closing logo is optional and must never delay the main editor.
-  waitForMetadata(fg2Video).then(() => {
-    const wasPlaying = state.templateReady && !previewMasterVideo.paused;
-    const current = Number($('timeline').value) || 0;
+  // fg2 loads in parallel and never adds more than 250 ms to initial readiness.
+  // Usually its metadata lands before bg+fg and the correct longest master is chosen once.
+  const fg2Task = waitForMetadata(fg2Video).then(() => {
     state.closingLogoAvailable = true;
     fg2Video.muted = true;
     closingLogoToggle?.removeAttribute('disabled');
     if (closingLogoToggle) closingLogoToggle.checked = state.closingLogo;
     fg2Video.classList.toggle('is-hidden', !state.closingLogo);
+    const current = Number($('timeline').value) || 0;
     refreshTemplateDuration();
     setVideoTime(fg2Video, current);
-    if (wasPlaying && (state.closingLogo || previewMasterVideo === fg2Video)) fg2Video.play().catch(() => {});
+    if (state.templateReady && (state.closingLogo || previewMasterVideo === fg2Video) && !previewMasterVideo.paused) {
+      fg2Video.play().catch(() => {});
+    }
+    return true;
   }).catch(() => {
     state.closingLogoAvailable = false;
     state.closingLogo = false;
@@ -1018,15 +996,18 @@ async function initTemplate() {
     }
     fg2Video.classList.add('is-hidden');
     if (state.templateReady) refreshTemplateDuration();
+    return false;
   });
 
   try {
     await Promise.all([waitForMetadata(bgVideo), waitForMetadata(fgVideo)]);
+    await Promise.race([fg2Task, new Promise((resolve) => setTimeout(resolve, 250))]);
     activateTemplateUi();
   } catch (_) {
     state.templateReady = false;
   }
 }
+
 function waitForMetadata(video) {
   return new Promise((resolve, reject) => {
     if (video.readyState >= 1 && Number.isFinite(video.duration)) return resolve();
@@ -1042,17 +1023,21 @@ function setVideoTime(video, t) {
   if (!video.src || !Number.isFinite(video.duration)) return;
   video.currentTime = Math.min(Math.max(0, t), Math.max(0, video.duration - .001));
 }
+
 function syncAt(t) {
-  setVideoTime(bgVideo, t);
-  setVideoTime(fgVideo, t);
-  if (state.closingLogoAvailable) setVideoTime(fg2Video, t);
-  if (state.mediaType === 'video') setVideoTime(mediaVideo, t % Math.max(.001, mediaVideo.duration || state.duration));
-  $('timeline').value = t;
-  $('timeNow').textContent = formatTime(t);
-  applyVisualState(t);
+  const safe = Math.min(Math.max(0, Number(t) || 0), Math.max(0, state.duration));
+  setVideoTime(bgVideo, safe);
+  setVideoTime(fgVideo, safe);
+  if (state.closingLogoAvailable) setVideoTime(fg2Video, safe);
+  if (state.mediaType === 'video') setVideoTime(mediaVideo, safe % Math.max(.001, mediaVideo.duration || state.duration));
+  $('timeline').value = safe;
+  $('timeNow').textContent = formatTime(safe);
+  state.lastPreviewTime = safe;
+  applyVisualState(safe);
 }
 
 $('timeline').addEventListener('input', (e) => {
+  // Scrubbing is intentionally the same simple pause+seek path as the stable build.
   pausePreview();
   syncAt(Number(e.target.value));
 });
@@ -1070,40 +1055,54 @@ async function playPreview({ preserveUi = false } = {}) {
   setVideoTime(fgVideo, current);
   if (state.closingLogoAvailable) setVideoTime(fg2Video, current);
   if (state.mediaType === 'video') setVideoTime(mediaVideo, current % Math.max(.001, mediaVideo.duration || state.duration));
+  state.lastPreviewTime = current;
   try {
-    // The longest template video is the preview clock, even when fg2 is hidden.
     await previewMasterVideo.play();
     if (previewMasterVideo !== bgVideo) bgVideo.play().catch(() => {});
     if (previewMasterVideo !== fgVideo) fgVideo.play().catch(() => {});
     if (state.closingLogoAvailable && (state.closingLogo || previewMasterVideo === fg2Video) && previewMasterVideo !== fg2Video) fg2Video.play().catch(() => {});
     if (state.mode === 'media' && state.mediaType === 'video') mediaVideo.play().catch(() => {});
     $('playGlyph').innerHTML = '<path d="M6.5 5h2.5v10H6.5zM11 5h2.5v10H11z"/>';
+    cancelAnimationFrame(state.raf);
     tickPreview();
-  } catch (_) { showToast('Playback was blocked by the browser.'); }
+  } catch (_) {
+    // Autoplay can be blocked on some browsers. Controls remain usable; first tap can start it.
+    $('playGlyph').innerHTML = '<path d="m7 5 8 5-8 5z"/>';
+  }
 }
+
 function pausePreview() {
   bgVideo.pause(); fgVideo.pause(); fg2Video.pause(); mediaVideo.pause();
   cancelAnimationFrame(state.raf);
   $('playGlyph').innerHTML = '<path d="m7 5 8 5-8 5z"/>';
 }
 
-function restartPreviewLoop() {
-  if (!state.templateReady || state.loopRestarting) return;
-  state.loopRestarting = true;
-  pausePreview();
-  syncAt(0);
-  requestAnimationFrame(async () => {
-    state.loopRestarting = false;
-    await playPreview({ preserveUi: true });
-  });
+function replaySecondaryLayersAt(t) {
+  const playIfNeeded = (video, shouldPlay = true) => {
+    if (!video || video === previewMasterVideo || !Number.isFinite(video.duration)) return;
+    setVideoTime(video, t);
+    if (shouldPlay) video.play().catch(() => {});
+  };
+  playIfNeeded(bgVideo, true);
+  playIfNeeded(fgVideo, true);
+  if (state.closingLogoAvailable) playIfNeeded(fg2Video, state.closingLogo || previewMasterVideo === fg2Video);
+  if (state.mode === 'media' && state.mediaType === 'video' && mediaVideo.duration) {
+    setVideoTime(mediaVideo, t % mediaVideo.duration);
+    mediaVideo.play().catch(() => {});
+  }
 }
+
 function tickPreview() {
   if (previewMasterVideo.paused) return;
   const t = previewMasterVideo.currentTime;
+  const wrapped = t + .15 < state.lastPreviewTime;
+  if (wrapped) replaySecondaryLayersAt(t);
+  state.lastPreviewTime = t;
+
   $('timeline').value = Math.min(t, state.duration);
   $('timeNow').textContent = formatTime(t);
   const syncTemplateVideo = (video) => {
-    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    if (!Number.isFinite(video.duration) || video.duration <= 0 || video === previewMasterVideo) return;
     const target = Math.min(t, Math.max(0, video.duration - .001));
     if (Math.abs(video.currentTime - target) > .08) setVideoTime(video, t);
   };
@@ -1115,17 +1114,11 @@ function tickPreview() {
     if (Math.abs(mediaVideo.currentTime - mt) > .1) setVideoTime(mediaVideo, mt);
   }
   applyVisualState(t);
-  if (t >= state.duration - .015) { restartPreviewLoop(); return; }
   state.raf = requestAnimationFrame(tickPreview);
 }
 
-for (const video of [bgVideo, fgVideo, fg2Video]) {
-  video.addEventListener('ended', () => {
-    if (video === previewMasterVideo && state.templateReady) restartPreviewLoop();
-  });
-}
-
 function unlockPreviewAudio() {
+  if (state.previewAudioUnlocked) return;
   state.previewAudioUnlocked = true;
   bgVideo.muted = false;
 }
@@ -1193,7 +1186,7 @@ function drawTextLayer(ctx, time) {
   const s = animatedScaleAt(time);
   ctx.save();
   ctx.translate(1080 * state.x / 100, 1920 * state.y / 100);
-  // The existing automatic scale remains a single uniform layer transform.
+  // One uniform automatic scale for the complete text layer.
   ctx.scale(s, s);
   ctx.fillStyle = state.color;
   ctx.textBaseline = 'alphabetic';
@@ -1522,10 +1515,11 @@ window.addEventListener('resize', updateStageUnit);
 window.addEventListener('orientationchange', () => setTimeout(updateStageUnit, 120));
 setMode('text');
 setColor('#F3F3F3');
+syncSideEditorFromModel(true);
 syncAnimatedTextModel();
 if (wordByWordToggle) wordByWordToggle.checked = state.wordByWord;
 applyVisualState(0);
-requestAnimationFrame(() => setTimeout(initTemplate, 0));
+initTemplate();
 
 setMobileFontUi('EzerSemiBold');
 syncMobileSelectionControls();

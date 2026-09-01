@@ -24,9 +24,9 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--bg)}
-button,input,select,textarea{font:inherit;color:inherit}
+button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
-button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 svg{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
 .is-hidden{display:none!important}
 
@@ -275,21 +275,20 @@ svg{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-
 @media(max-width:760px){.mobile-selection-toolbar.is-docked-bottom{box-shadow:0 -6px 26px rgba(0,0,0,.14)}.mobile-font-popover{scrollbar-width:thin}}
 
 
-/* v15 text copy + deterministic entrance animation */
+/* v18 stable text-motion + rich side editor */
 .text-copy-control{display:flex;flex-direction:column;gap:7px}
-.side-rich-text{width:100%;min-height:82px;max-height:170px;overflow:auto;padding:12px;border:1px solid #333;border-radius:10px;background:#191919;color:#f3f3f3;outline:none;font-family:EzerSemiBold,sans-serif;font-size:12px;line-height:1.08;letter-spacing:0;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text;-webkit-user-select:text;user-select:text;transition:border-color .12s ease,box-shadow .12s ease}
-.side-rich-text:focus{border-color:#666;box-shadow:0 0 0 2px rgba(0,0,0,.05)}
+.side-rich-text{width:100%;min-height:86px;max-height:176px;overflow:auto;padding:12px;border:1px solid #343432;border-radius:10px;background:#191919;color:#f3f3f3;outline:none;font-family:EzerSemiBold,sans-serif;font-size:26px;line-height:1.08;letter-spacing:0;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text;-webkit-user-select:text;user-select:text;transition:border-color .12s ease,box-shadow .12s ease}
+.side-rich-text:focus{border-color:#70706b;box-shadow:0 0 0 2px rgba(0,0,0,.05)}
 .side-rich-text:empty::before{content:'Type text…';color:#777;pointer-events:none}
-.animated-text.entrance-hidden{visibility:hidden!important}
-.animated-text{pointer-events:none;cursor:default;transform:translateY(0);will-change:transform;visibility:hidden}
-.editor-object:not(.is-editing) .editable-text-model{position:absolute;inset:0;visibility:hidden;pointer-events:none}
-.editor-object.is-editing .editable-text-model{position:relative;visibility:visible;pointer-events:auto}
-.editor-object.is-editing .animated-text{display:none}
-.motion-word{display:inline-block;white-space:pre;will-change:transform;visibility:hidden}
+.animated-text{pointer-events:none;cursor:default;will-change:transform;visibility:visible}
+.animated-text.motion-hidden{visibility:hidden!important}
+/* The editable DOM is only a model/editor. It can never leak into normal preview frames. */
+.editable-text-model{display:none!important}
+.editor-object.is-editing .editable-text-model{display:block!important;position:relative;visibility:visible;pointer-events:auto}
+.editor-object.is-editing .animated-text{display:none!important}
+.motion-word{display:inline-block;white-space:pre;will-change:transform}
 .motion-space{white-space:pre}
-
 @media(max-width:760px){
-  .side-rich-text{min-height:96px;max-height:150px;font-size:16px;border-radius:11px;padding:12px}
+  .side-rich-text{min-height:96px;max-height:150px;font-size:24px;border-radius:11px;padding:12px}
+  body.inspector-open .mobile-selection-toolbar.is-visible{display:block!important}
 }
-/* v17: rich side editor can use the same mobile selection toolbar while inspector is open */
-@media(max-width:760px){body.inspector-open .mobile-selection-toolbar.is-visible{display:block!important}}
