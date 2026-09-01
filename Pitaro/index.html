@@ -57,10 +57,10 @@
           </div>
 
           <div class="control-stack">
-            <label class="text-copy-control" for="textContentEditor">
-              <span class="control-label">Text</span>
-              <textarea id="textContentEditor" rows="3" spellcheck="true" aria-label="Text content">Meet your new Toolbox</textarea>
-            </label>
+            <div class="text-copy-control">
+              <span class="control-label">Text <span>rich text</span></span>
+              <div id="textContentEditor" class="side-rich-text" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" aria-label="Text content"><span style="font-family:EzerSemiBold">Meet your new </span><span style="font-family:Gestura">Toolbox</span></div>
+            </div>
 
             <label class="control-label" for="fontSelect">Font <span>selection</span></label>
             <div class="select-shell">
@@ -178,12 +178,12 @@
               <span><code>assets/bg.webm</code> + <code>assets/fg.webm</code></span>
             </div>
 
-            <video id="bgVideo" class="stage-video stage-bg" playsinline preload="auto"></video>
+            <video id="bgVideo" class="stage-video stage-bg" playsinline preload="metadata"></video>
 
             <div id="object" class="editor-object is-selected" data-mode="text">
               <div id="objectContent" class="object-content">
                 <div id="editableText" class="editable-text editable-text-model" contenteditable="false" spellcheck="false"><span style="font-family:EzerSemiBold">Meet your new </span><span style="font-family:Gestura">Toolbox</span></div>
-                <div id="animatedText" class="editable-text animated-text" aria-hidden="true"></div>
+                <div id="animatedText" class="editable-text animated-text entrance-hidden" aria-hidden="true"></div>
                 <img id="mediaImage" class="media-preview is-hidden" alt="Uploaded media" />
                 <video id="mediaVideo" class="media-preview is-hidden" playsinline muted preload="metadata"></video>
               </div>
@@ -199,8 +199,8 @@
               </div>
             </div>
 
-            <video id="fgVideo" class="stage-video stage-fg" playsinline muted preload="auto"></video>
-            <video id="fg2Video" class="stage-video stage-fg2 is-hidden" playsinline muted preload="auto"></video>
+            <video id="fgVideo" class="stage-video stage-fg" playsinline muted preload="metadata"></video>
+            <video id="fg2Video" class="stage-video stage-fg2 is-hidden" playsinline muted preload="metadata"></video>
           </div>
         </div>
 

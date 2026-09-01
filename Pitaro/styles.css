@@ -277,8 +277,10 @@ svg{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-
 
 /* v15 text copy + deterministic entrance animation */
 .text-copy-control{display:flex;flex-direction:column;gap:7px}
-.text-copy-control textarea{width:100%;min-height:74px;max-height:150px;resize:vertical;padding:10px 11px;border:1px solid var(--border);border-radius:9px;background:#fff;color:#242423;outline:none;font-size:12px;line-height:1.35}
-.text-copy-control textarea:focus{border-color:#a8a8a3}
+.side-rich-text{width:100%;min-height:82px;max-height:170px;overflow:auto;padding:12px;border:1px solid #333;border-radius:10px;background:#191919;color:#f3f3f3;outline:none;font-family:EzerSemiBold,sans-serif;font-size:12px;line-height:1.08;letter-spacing:0;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;cursor:text;-webkit-user-select:text;user-select:text;transition:border-color .12s ease,box-shadow .12s ease}
+.side-rich-text:focus{border-color:#666;box-shadow:0 0 0 2px rgba(0,0,0,.05)}
+.side-rich-text:empty::before{content:'Type text…';color:#777;pointer-events:none}
+.animated-text.entrance-hidden{visibility:hidden!important}
 .animated-text{pointer-events:none;cursor:default;transform:translateY(0);will-change:transform;visibility:hidden}
 .editor-object:not(.is-editing) .editable-text-model{position:absolute;inset:0;visibility:hidden;pointer-events:none}
 .editor-object.is-editing .editable-text-model{position:relative;visibility:visible;pointer-events:auto}
@@ -287,5 +289,7 @@ svg{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-
 .motion-space{white-space:pre}
 
 @media(max-width:760px){
-  .text-copy-control textarea{min-height:88px;max-height:128px;font-size:16px;border-radius:11px;padding:11px 12px}
+  .side-rich-text{min-height:96px;max-height:150px;font-size:16px;border-radius:11px;padding:12px}
 }
+/* v17: rich side editor can use the same mobile selection toolbar while inspector is open */
+@media(max-width:760px){body.inspector-open .mobile-selection-toolbar.is-visible{display:block!important}}

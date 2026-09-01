@@ -24,10 +24,14 @@ The composition duration is the longest of `bg.webm`, `fg.webm`, and `fg2.webm`.
 - `Word by word` staggers each word by 3 frames while keeping the same position animation.
 - The existing automatic scale animation remains one uniform transform for the complete text layer.
 
-The text can also be edited from the Typography panel using the dedicated text field, including while the animated text is currently hidden in the preview.
+The Typography panel contains a true rich-text editor using the same Ezer/Gestura font runs and text styling as the composition. Select characters or words there and use the same font controls; changes update the canvas and export model in real time, including while frames 0–9 are hidden.
 
 ## Mobile text styling
 Tap **Edit text**, select characters, and use the floating typography toolbar above the keyboard. Font changes and size steps preserve the selection; **More** opens the full typography panel.
 
 ## Deploy
 Upload the folder contents to a GitHub repository and enable GitHub Pages for the repository root.
+
+
+## Loading
+The required background/foreground metadata enables the editor first. The optional `fg2.webm` metadata loads in parallel and no longer blocks the main UI. Template videos use metadata-first preload to reduce initial startup work.

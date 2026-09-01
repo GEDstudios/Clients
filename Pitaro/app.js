@@ -82,6 +82,9 @@ const mobileColorSwatch = $('mobileColorSwatch');
 const mobileSelectionMore = $('mobileSelectionMore');
 const mobileQuery = window.matchMedia('(max-width: 760px)');
 let savedTextRange = null;
+let savedTextRoot = editableText;
+let activeTextEditor = editableText;
+let syncingFromSideEditor = false;
 let pendingExport = null;
 let previewMasterVideo = bgVideo;
 
@@ -93,12 +96,20 @@ const MOBILE_FONT_LABELS = {
   Gestura: 'Gestura Black Italic',
 };
 
+function textEditorContainingNode(node) {
+  if (!node) return null;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  if (editableText && (el === editableText || editableText.contains(el))) return editableText;
+  if (textContentEditor && (el === textContentEditor || textContentEditor.contains(el))) return textContentEditor;
+  return null;
+}
+
 function savedSelectionIsUsable() {
-  if (!savedTextRange || savedTextRange.collapsed) return false;
+  if (!savedTextRange || savedTextRange.collapsed || !savedTextRoot) return false;
   const root = savedTextRange.commonAncestorContainer?.nodeType === Node.TEXT_NODE
     ? savedTextRange.commonAncestorContainer.parentElement
     : savedTextRange.commonAncestorContainer;
-  return !!root && editableText.contains(root);
+  return !!root && (root === savedTextRoot || savedTextRoot.contains(root));
 }
 
 function setMobileFontUi(fontKey) {
@@ -153,7 +164,7 @@ function positionMobileSelectionToolbar() {
 }
 
 function showMobileSelectionToolbar() {
-  if (!mobileQuery.matches || state.mode !== 'text' || !state.editing || !savedSelectionIsUsable()) {
+  if (!mobileQuery.matches || state.mode !== 'text' || !savedSelectionIsUsable()) {
     hideMobileSelectionToolbar();
     return;
   }
@@ -164,9 +175,12 @@ function showMobileSelectionToolbar() {
 }
 
 function refreshMobileSelectionToolbarFromSelection() {
-  if (!mobileQuery.matches || !state.editing) return hideMobileSelectionToolbar();
+  if (!mobileQuery.matches || state.mode !== 'text') return hideMobileSelectionToolbar();
   const sel = window.getSelection();
-  if (sel?.rangeCount && sel.anchorNode && editableText.contains(sel.anchorNode)) {
+  const root = sel?.anchorNode ? textEditorContainingNode(sel.anchorNode) : null;
+  if (sel?.rangeCount && root) {
+    savedTextRoot = root;
+    activeTextEditor = root;
     savedTextRange = sel.getRangeAt(0).cloneRange();
     if (sel.isCollapsed) return hideMobileSelectionToolbar();
     return showMobileSelectionToolbar();
@@ -255,14 +269,15 @@ function textEntranceAt(time, wordIndex = 0) {
   const frame = Math.max(0, Number(time) || 0) * PREVIEW_FPS;
   const stagger = state.wordByWord ? Math.max(0, wordIndex) * WORD_STAGGER_FRAMES : 0;
   const start = TEXT_ENTRANCE_DELAY_FRAMES + stagger;
-
-  // Visibility switches on at the exact same frame the position animation starts.
-  // There is no opacity animation: before `start` it is absent; at `start` it is
-  // fully visible at +50 px and immediately begins its rise.
   if (frame + 1e-7 < start) return { visible: false, offset: TEXT_RISE_PX };
 
-  const p = Math.min(1, Math.max(0, (frame - start) / TEXT_ENTRANCE_DURATION_FRAMES));
-  // Exact cubic-bezier(0, 0.5, 0, 1): x=u^3, y=1.5u-0.5u^3.
+  // In whole-sentence mode, the first visible frame is already moving rather
+  // than showing one stationary frame at the +50 px start position.
+  const motionFrame = (frame - start) + (state.wordByWord ? 0 : 1);
+  const p = Math.min(1, Math.max(0, motionFrame / TEXT_ENTRANCE_DURATION_FRAMES));
+
+  // Exact cubic-bezier(0,0.5,0,1). Because x(u)=u^3, u=cuberoot(p),
+  // and y(u)=1.5u - 0.5u^3.
   const u = Math.cbrt(p);
   const eased = 1.5 * u - 0.5 * p;
   return { visible: true, offset: TEXT_RISE_PX * (1 - eased) };
@@ -320,10 +335,24 @@ function setEditableTextFromChars(chars) {
   appendStyledChars(editableText, chars);
 }
 
-function syncTextEditorFromModel() {
+function syncTextEditorFromModel(force = false) {
   if (!textContentEditor) return;
-  const plain = extractStyledChars(false).map((item) => item.ch).join('');
-  if (textContentEditor.value !== plain) textContentEditor.value = plain;
+  // Never replace the DOM while the user is actively selecting/typing in the side editor.
+  if (!force && (syncingFromSideEditor || (activeTextEditor === textContentEditor && document.activeElement === textContentEditor))) return;
+  if (textContentEditor.innerHTML !== editableText.innerHTML) textContentEditor.innerHTML = editableText.innerHTML;
+}
+
+function syncCanvasModelFromSideEditor() {
+  if (!textContentEditor) return;
+  syncingFromSideEditor = true;
+  try {
+    const chars = extractStyledChars(false, textContentEditor);
+    setEditableTextFromChars(chars);
+    syncAnimatedTextModel();
+    applyVisualState(Number($('timeline').value) || 0);
+  } finally {
+    syncingFromSideEditor = false;
+  }
 }
 
 function syncAnimatedTextModel() {
@@ -365,11 +394,15 @@ function updateTextEntrancePreview(time) {
   const words = animatedText.querySelectorAll('.motion-word');
   if (!state.wordByWord) {
     const motion = textEntranceAt(time, 0);
+    // The class is an authoritative guard: no other inline/editor state can make
+    // the sentence visible before its entrance frame.
+    animatedText.classList.toggle('entrance-hidden', !motion.visible);
     animatedText.style.visibility = motion.visible ? 'visible' : 'hidden';
     animatedText.style.transform = `translateY(${motion.offset * unit}px)`;
     words.forEach((word) => { word.style.visibility = 'visible'; word.style.transform = 'translateY(0)'; });
     return;
   }
+  animatedText.classList.remove('entrance-hidden');
   animatedText.style.visibility = 'visible';
   animatedText.style.transform = 'translateY(0)';
   words.forEach((word) => {
@@ -428,6 +461,16 @@ function applyVisualState(time = bgVideo.currentTime || 0) {
     textLayer.style.lineHeight = `${state.lineHeight / 100}`;
     textLayer.style.textAlign = state.align;
   }
+  if (textContentEditor) {
+    // A compact preview of the same typography: exact font runs/color/alignment,
+    // scaled down only so an 80px composition font remains usable in the inspector.
+    const sideScale = Math.min(0.48, Math.max(0.28, 34 / Math.max(16, state.fontSize)));
+    textContentEditor.style.fontSize = `${state.fontSize * sideScale}px`;
+    textContentEditor.style.color = state.color;
+    textContentEditor.style.letterSpacing = `${state.tracking * sideScale}px`;
+    textContentEditor.style.lineHeight = `${state.lineHeight / 100}`;
+    textContentEditor.style.textAlign = state.align;
+  }
   updateTextEntrancePreview(time);
 
   $('xField').value = Number(state.x.toFixed(1));
@@ -468,13 +511,15 @@ function enterTextEdit(restoreSelection = false) {
   if (state.mode !== 'text') return;
   if (!previewMasterVideo.paused) pausePreview();
   state.editing = true;
+  activeTextEditor = editableText;
+  savedTextRoot = editableText;
   object.classList.add('is-editing', 'is-selected');
   editableText.contentEditable = 'true';
   editableText.focus({ preventScroll: true });
   const sel = window.getSelection();
   if (!sel) return;
   sel.removeAllRanges();
-  if (restoreSelection && savedTextRange) {
+  if (restoreSelection && savedTextRange && savedTextRoot === editableText) {
     try { sel.addRange(savedTextRange.cloneRange()); return; } catch (_) {}
   }
   const range = document.createRange();
@@ -493,47 +538,66 @@ function exitTextEdit() {
   applyVisualState(Number($('timeline').value) || 0);
 }
 
+function syncAfterRichTextMutation(root) {
+  if (root === textContentEditor) {
+    syncCanvasModelFromSideEditor();
+  } else {
+    syncAnimatedTextModel();
+    syncTextEditorFromModel();
+    applyVisualState(Number($('timeline').value) || 0);
+  }
+}
+
 function applyFontToSelection(fontKey) {
   if (state.mode !== 'text') return;
   const family = FONT_NAMES[fontKey] || FONT_NAMES.EzerSemiBold;
 
-  // On touch devices, keep the OS text selection intact while the Style sheet is open.
-  // Mutating the saved Range directly avoids bouncing the keyboard back up just to change a font.
-  if (mobileQuery.matches && savedTextRange && !savedTextRange.collapsed) {
+  // Use the saved Range directly. This works for both the canvas editor and the
+  // inspector rich-text editor, and prevents dropdown focus from destroying selection.
+  if (savedSelectionIsUsable()) {
     try {
+      const root = savedTextRoot;
       const range = savedTextRange.cloneRange();
       const fragment = range.extractContents();
       const span = document.createElement('span');
       span.style.fontFamily = family;
       span.appendChild(fragment);
-      span.querySelectorAll('[style]').forEach((el) => { if (el.style.fontFamily) el.style.removeProperty('font-family'); });
+      span.querySelectorAll('[style]').forEach((el) => {
+        if (el.style.fontFamily) el.style.removeProperty('font-family');
+      });
       range.insertNode(span);
       const nextRange = document.createRange();
       nextRange.selectNodeContents(span);
       savedTextRange = nextRange;
-      syncAnimatedTextModel();
+      savedTextRoot = root;
+      activeTextEditor = root;
+      syncAfterRichTextMutation(root);
       return;
     } catch (_) {}
   }
 
-  if (!state.editing) enterTextEdit(true);
+  // No selection: keep the familiar canvas edit fallback.
+  if (!state.editing) enterTextEdit(false);
   editableText.focus({ preventScroll: true });
-  const sel = window.getSelection();
-  if (sel && savedTextRange) {
-    try { sel.removeAllRanges(); sel.addRange(savedTextRange.cloneRange()); } catch (_) {}
-  }
   try {
     document.execCommand('styleWithCSS', false, true);
     document.execCommand('fontName', false, family);
     const current = window.getSelection();
-    if (current?.rangeCount && editableText.contains(current.anchorNode)) savedTextRange = current.getRangeAt(0).cloneRange();
-    syncAnimatedTextModel();
+    if (current?.rangeCount && textEditorContainingNode(current.anchorNode)) {
+      savedTextRoot = textEditorContainingNode(current.anchorNode);
+      savedTextRange = current.getRangeAt(0).cloneRange();
+    }
+    syncAfterRichTextMutation(editableText);
   } catch (_) {}
 }
 
 function updateActiveFontFromSelection() {
   const sel = window.getSelection();
-  if (!sel || !sel.anchorNode || !editableText.contains(sel.anchorNode)) return;
+  if (!sel || !sel.anchorNode) return;
+  const root = textEditorContainingNode(sel.anchorNode);
+  if (!root) return;
+  activeTextEditor = root;
+  savedTextRoot = root;
   if (sel.rangeCount) savedTextRange = sel.getRangeAt(0).cloneRange();
   const el = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
   if (!el) return;
@@ -547,7 +611,7 @@ function updateActiveFontFromSelection() {
 }
 
 $('fontSelect').addEventListener('change', (e) => applyFontToSelection(e.target.value));
-textContentEditor?.addEventListener('input', (e) => reconcileExternalText(e.target.value));
+
 wordByWordToggle?.addEventListener('change', (e) => {
   state.wordByWord = !!e.target.checked;
   syncAnimatedTextModel();
@@ -555,7 +619,7 @@ wordByWordToggle?.addEventListener('change', (e) => {
 });
 document.addEventListener('selectionchange', () => {
   updateActiveFontFromSelection();
-  if (mobileQuery.matches && state.editing) refreshMobileSelectionToolbarFromSelection();
+  if (mobileQuery.matches) refreshMobileSelectionToolbarFromSelection();
 });
 
 $('fontSize').addEventListener('input', (e) => {
@@ -632,6 +696,32 @@ editableText.addEventListener('input', () => {
   if (!editableText.innerText.trim()) editableText.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
   syncTextEditorFromModel();
   syncAnimatedTextModel();
+});
+
+textContentEditor?.addEventListener('focus', () => {
+  activeTextEditor = textContentEditor;
+  savedTextRoot = textContentEditor;
+});
+textContentEditor?.addEventListener('input', () => {
+  activeTextEditor = textContentEditor;
+  savedTextRoot = textContentEditor;
+  if (!textContentEditor.innerText.trim()) textContentEditor.innerHTML = '<span style="font-family:EzerSemiBold"><br></span>';
+  syncCanvasModelFromSideEditor();
+});
+textContentEditor?.addEventListener('pointerup', () => {
+  activeTextEditor = textContentEditor;
+  setTimeout(updateActiveFontFromSelection, 0);
+});
+textContentEditor?.addEventListener('keyup', () => {
+  activeTextEditor = textContentEditor;
+  setTimeout(updateActiveFontFromSelection, 0);
+});
+textContentEditor?.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    textContentEditor.blur();
+    hideMobileSelectionToolbar();
+  }
 });
 editableText.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.preventDefault(); exitTextEdit(); stage.focus(); }
@@ -872,55 +962,67 @@ function loadMedia(file) {
 }
 
 // Template preview.
+function refreshTemplateDuration() {
+  const candidates = [
+    { video: bgVideo, duration: bgVideo.duration },
+    { video: fgVideo, duration: fgVideo.duration },
+    ...(state.closingLogoAvailable ? [{ video: fg2Video, duration: fg2Video.duration }] : []),
+  ].filter(item => Number.isFinite(item.duration) && item.duration > 0);
+  const longest = candidates.reduce((best, item) => !best || item.duration > best.duration ? item : best, null);
+  if (!longest) return false;
+  state.duration = longest.duration;
+  previewMasterVideo = longest.video;
+  $('timeline').max = state.duration;
+  $('timeTotal').textContent = formatTime(state.duration);
+  return true;
+}
+
+function activateTemplateUi() {
+  state.templateReady = refreshTemplateDuration();
+  if (!state.templateReady) return;
+  $('missingAssets').classList.add('is-hidden');
+  $('timeline').disabled = false;
+  $('playPause').disabled = false;
+  $('exportButton').disabled = false;
+  fgVideo.muted = true;
+  bgVideo.muted = !state.previewAudioUnlocked;
+  syncAt(0);
+  requestAnimationFrame(() => playPreview({ preserveUi: true }));
+}
+
 async function initTemplate() {
+  // Metadata-first loading keeps the UI light. The browser starts fetching full
+  // streams only when autoplay/playback actually needs them.
   bgVideo.src = './assets/bg.webm';
   fgVideo.src = './assets/fg.webm';
   fg2Video.src = './assets/fg2.webm';
-  const fg2Metadata = waitForMetadata(fg2Video).then(() => true, () => false);
+
+  // Closing logo is optional and must never delay the main editor.
+  waitForMetadata(fg2Video).then(() => {
+    const wasPlaying = state.templateReady && !previewMasterVideo.paused;
+    const current = Number($('timeline').value) || 0;
+    state.closingLogoAvailable = true;
+    fg2Video.muted = true;
+    closingLogoToggle?.removeAttribute('disabled');
+    if (closingLogoToggle) closingLogoToggle.checked = state.closingLogo;
+    fg2Video.classList.toggle('is-hidden', !state.closingLogo);
+    refreshTemplateDuration();
+    setVideoTime(fg2Video, current);
+    if (wasPlaying && (state.closingLogo || previewMasterVideo === fg2Video)) fg2Video.play().catch(() => {});
+  }).catch(() => {
+    state.closingLogoAvailable = false;
+    state.closingLogo = false;
+    if (closingLogoToggle) {
+      closingLogoToggle.checked = false;
+      closingLogoToggle.disabled = false;
+    }
+    fg2Video.classList.add('is-hidden');
+    if (state.templateReady) refreshTemplateDuration();
+  });
+
   try {
     await Promise.all([waitForMetadata(bgVideo), waitForMetadata(fgVideo)]);
-
-    // fg2.webm is optional. Its absence must never block the main template.
-    if (await fg2Metadata) {
-      state.closingLogoAvailable = true;
-      fg2Video.muted = true;
-      closingLogoToggle?.removeAttribute('disabled');
-      if (closingLogoToggle) closingLogoToggle.checked = state.closingLogo;
-      fg2Video.classList.toggle('is-hidden', !state.closingLogo);
-    } else {
-      state.closingLogoAvailable = false;
-      state.closingLogo = false;
-      if (closingLogoToggle) {
-        closingLogoToggle.checked = false;
-        closingLogoToggle.disabled = false;
-      }
-      fg2Video.classList.add('is-hidden');
-    }
-
-    // The composition always uses the longest available template video.
-    const candidates = [
-      { video: bgVideo, duration: bgVideo.duration },
-      { video: fgVideo, duration: fgVideo.duration },
-      ...(state.closingLogoAvailable ? [{ video: fg2Video, duration: fg2Video.duration }] : []),
-    ].filter(item => Number.isFinite(item.duration) && item.duration > 0);
-    const longest = candidates.reduce((best, item) => !best || item.duration > best.duration ? item : best, null);
-    state.duration = longest?.duration || 0;
-    previewMasterVideo = longest?.video || bgVideo;
-    state.templateReady = Number.isFinite(state.duration) && state.duration > 0;
-    if (!state.templateReady) throw new Error('Invalid duration');
-
-    $('missingAssets').classList.add('is-hidden');
-    $('timeline').max = state.duration;
-    $('timeline').disabled = false;
-    $('playPause').disabled = false;
-    $('exportButton').disabled = false;
-    $('timeTotal').textContent = formatTime(state.duration);
-    fgVideo.muted = true;
-    // Autoplay previews start muted to satisfy mobile/browser autoplay policy.
-    // The first user gesture restores background preview audio; export audio is unaffected.
-    bgVideo.muted = !state.previewAudioUnlocked;
-    syncAt(0);
-    requestAnimationFrame(() => playPreview({ preserveUi: true }));
+    activateTemplateUi();
   } catch (_) {
     state.templateReady = false;
   }
@@ -1035,20 +1137,20 @@ function fontKeyForElement(el) {
   const family = getComputedStyle(el).fontFamily.replace(/["']/g, '');
   return Object.keys(FONT_NAMES).find((k) => family.includes(FONT_NAMES[k])) || 'EzerSemiBold';
 }
-function extractStyledChars(includeFallback = true) {
+function extractStyledChars(includeFallback = true, root = editableText) {
   const chars = [];
   const walk = (node) => {
     if (node.nodeType === Node.TEXT_NODE) {
-      const key = fontKeyForElement(node.parentElement || editableText);
+      const key = fontKeyForElement(node.parentElement || root);
       for (const ch of node.nodeValue || '') chars.push({ ch, font: key });
       return;
     }
     if (node.nodeName === 'BR') { chars.push({ ch: '\n', font: 'EzerSemiBold' }); return; }
-    const isBlock = node !== editableText && /^(DIV|P)$/.test(node.nodeName);
+    const isBlock = node !== root && /^(DIV|P)$/.test(node.nodeName);
     if (isBlock && chars.length && chars[chars.length - 1].ch !== '\n') chars.push({ ch: '\n', font: 'EzerSemiBold' });
     for (const child of node.childNodes) walk(child);
   };
-  walk(editableText);
+  walk(root);
   while (chars.length && chars[chars.length - 1].ch === '\n') chars.pop();
   return chars.length ? chars : (includeFallback ? [{ ch: ' ', font: 'EzerSemiBold' }] : []);
 }
@@ -1423,7 +1525,7 @@ setColor('#F3F3F3');
 syncAnimatedTextModel();
 if (wordByWordToggle) wordByWordToggle.checked = state.wordByWord;
 applyVisualState(0);
-initTemplate();
+requestAnimationFrame(() => setTimeout(initTemplate, 0));
 
 setMobileFontUi('EzerSemiBold');
 syncMobileSelectionControls();
