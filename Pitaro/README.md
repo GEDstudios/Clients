@@ -21,7 +21,7 @@ The bundled fonts are already under `assets/fonts/`.
 - Preview autoplays muted when required by browser policy and loops by default; the first user gesture restores background preview audio.
 - Export audio comes only from `bg.webm`.
 - Text starts on frame 10 at +20 px Y and rises to its final position over 10 frames using `cubic-bezier(0, 1, 0, 1)`. There is no opacity animation.
-- `Word by word` is enabled by default. Each subsequent word starts 3 frames after the previous word, using the same position animation.
+- `Word by word` is enabled by default. Each subsequent word starts 2 frames after the previous word, using the same position animation.
 - The existing 2%/second automatic scale remains one uniform transform on the complete editable layer.
 - The inspector contains a synchronized rich-text editor, so copy and per-selection fonts can be edited even while the animated preview text is not yet visible.
 
@@ -53,3 +53,10 @@ Text entrance position easing is `cubic-bezier(0,0,0,1)`.
 - Preview UI/text updates are limited to the 30 fps composition frame grid.
 - While dragging the playhead on mobile, video seeks are throttled for responsiveness; an exact multi-layer seek is performed on release.
 - The mobile-safe software export path from v18.7 is unchanged.
+
+
+## v18.9 preview updates
+
+- Word-by-word stagger is 2 frames.
+- Mobile playhead scrubbing now shows a lightweight live composite while dragging; release performs the exact synchronized seek.
+- Mobile export remains unchanged from v18.8.

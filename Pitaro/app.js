@@ -19,7 +19,7 @@ const FONT_NAMES = {
 const PREVIEW_FPS = 30;
 const TEXT_ENTRANCE_DELAY_FRAMES = 10;
 const TEXT_ENTRANCE_DURATION_FRAMES = 10;
-const WORD_STAGGER_FRAMES = 3;
+const WORD_STAGGER_FRAMES = 2;
 const TEXT_RISE_PX = 20;
 const TEXT_ENTRANCE_START = TEXT_ENTRANCE_DELAY_FRAMES / PREVIEW_FPS;
 
@@ -98,6 +98,7 @@ let lastPreviewVisualFrame = -1;
 let mobileScrubTimer = null;
 let mobileScrubTarget = null;
 let mobileScrubFinishing = false;
+let mobileLiveScrubWorkerRunning = false;
 
 const MOBILE_FONT_LABELS = {
   EzerLight: 'Ezer Light',
@@ -1074,31 +1075,84 @@ function fastPreviewSeek(video, target) {
   if (target == null || !video?.src || !Number.isFinite(video.duration)) return;
   const safe = Math.min(Math.max(0, target), Math.max(0, video.duration - 0.001));
   try {
-    // During a drag, responsiveness matters more than decoding every intermediate frame.
-    // fastSeek is allowed to land on a nearby decodable frame; release performs an exact seek.
     if (typeof video.fastSeek === 'function') video.fastSeek(safe);
     else video.currentTime = safe;
   } catch (_) {}
 }
 
-function mobileScrubSeekNow(t) {
-  fastPreviewSeek(bgVideo, scrubTargetForVideo(bgVideo, t));
-  fastPreviewSeek(fgVideo, scrubTargetForVideo(fgVideo, t));
-  if (state.closingLogoAvailable) fastPreviewSeek(fg2Video, scrubTargetForVideo(fg2Video, t));
-  if (state.mode === 'media' && state.mediaType === 'video') {
-    fastPreviewSeek(mediaVideo, scrubTargetForVideo(mediaVideo, t, true));
+function seekVideoForLiveScrub(video, target) {
+  if (target == null || !video?.src || !Number.isFinite(video.duration)) return Promise.resolve();
+  const safe = Math.min(Math.max(0, target), Math.max(0, video.duration - 0.001));
+  if (Math.abs(video.currentTime - safe) < 0.0015 && video.readyState >= 2) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      video.removeEventListener('seeked', finish);
+      video.removeEventListener('error', finish);
+      resolve();
+    };
+    // Live scrub intentionally has a short ceiling. If a decoder is slow, show the
+    // best frame available now and catch up on the next requested position.
+    const timer = setTimeout(finish, 180);
+    video.addEventListener('seeked', finish, { once: true });
+    video.addEventListener('error', finish, { once: true });
+    fastPreviewSeek(video, safe);
+  });
+}
+
+function setMobileScrubCanvasQuality() {
+  if (!scrubCanvas) return;
+  // This canvas only exists while dragging. Half-resolution is much cheaper to
+  // composite on phones and still sharper than the displayed preview size.
+  if (scrubCanvas.width !== 270 || scrubCanvas.height !== 480) {
+    scrubCanvas.width = 270;
+    scrubCanvas.height = 480;
+  }
+}
+
+function setDesktopScrubCanvasQuality() {
+  if (!scrubCanvas) return;
+  if (scrubCanvas.width !== 540 || scrubCanvas.height !== 960) {
+    scrubCanvas.width = 540;
+    scrubCanvas.height = 960;
+  }
+}
+
+async function processMobileLiveScrubQueue() {
+  if (mobileLiveScrubWorkerRunning || mobileScrubFinishing) return;
+  mobileLiveScrubWorkerRunning = true;
+  try {
+    while (scrubActive && mobileScrubTarget != null && !mobileScrubFinishing) {
+      const t = mobileScrubTarget;
+      mobileScrubTarget = null;
+      const jobs = [
+        seekVideoForLiveScrub(bgVideo, scrubTargetForVideo(bgVideo, t)),
+        seekVideoForLiveScrub(fgVideo, scrubTargetForVideo(fgVideo, t)),
+      ];
+      if (state.closingLogoAvailable) jobs.push(seekVideoForLiveScrub(fg2Video, scrubTargetForVideo(fg2Video, t)));
+      if (state.mode === 'media' && state.mediaType === 'video') {
+        jobs.push(seekVideoForLiveScrub(mediaVideo, scrubTargetForVideo(mediaVideo, t, true)));
+      }
+      await Promise.all(jobs);
+      if (!scrubActive || mobileScrubFinishing) break;
+      // Draw every completed intermediate seek even if a newer target arrived while
+      // decoding. This is what makes the playhead feel live instead of frozen.
+      drawScrubComposite(t);
+    }
+  } finally {
+    mobileLiveScrubWorkerRunning = false;
+    if (scrubActive && mobileScrubTarget != null && !mobileScrubFinishing) {
+      processMobileLiveScrubQueue();
+    }
   }
 }
 
 function scheduleMobileScrubSeek(t) {
   mobileScrubTarget = t;
-  if (mobileScrubTimer != null) return;
-  mobileScrubTimer = window.setTimeout(() => {
-    mobileScrubTimer = null;
-    const target = mobileScrubTarget;
-    mobileScrubTarget = null;
-    if (target != null) mobileScrubSeekNow(target);
-  }, 42); // ~24 Hz: responsive without flooding mobile video decoders.
+  processMobileLiveScrubQueue();
 }
 
 async function finishMobileScrub(t) {
@@ -1121,6 +1175,11 @@ async function finishMobileScrub(t) {
   state.lastPreviewTime = t;
   lastPreviewVisualFrame = Math.floor(t * PREVIEW_FPS + 1e-7);
   applyVisualState(t);
+  drawScrubComposite(t);
+  // Keep the synchronized composite visible for one paint so the native video
+  // elements never flash an older frame as the scrub overlay disappears.
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  scrubCanvas?.classList.add('is-hidden');
   scrubActive = false;
   mobileScrubFinishing = false;
 }
@@ -1178,14 +1237,12 @@ function beginAtomicScrub() {
   if (scrubActive) return;
   pausePreview();
   scrubActive = true;
-  // Desktop keeps the exact composite-canvas scrubber. On mobile, showing the
-  // native video layers and issuing throttled seeks is dramatically more responsive.
-  if (!isMobilePreview()) {
-    drawScrubComposite(Number($('timeline').value) || 0);
-    scrubCanvas?.classList.remove('is-hidden');
-  } else {
-    scrubCanvas?.classList.add('is-hidden');
-  }
+  // During scrubbing we show a single composite canvas. On mobile it is rendered
+  // at half resolution to keep continuous feedback cheap while all video layers seek.
+  if (isMobilePreview()) setMobileScrubCanvasQuality();
+  else setDesktopScrubCanvasQuality();
+  drawScrubComposite(Number($('timeline').value) || 0);
+  scrubCanvas?.classList.remove('is-hidden');
 }
 
 async function processScrubQueue() {
