@@ -282,10 +282,11 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.remove('is-visible'), 2400);
 }
 
-function cubicBezier0101(progress) {
+function cubicBezier0001(progress) {
   const p = Math.min(1, Math.max(0, Number(progress) || 0));
-  const u = Math.cbrt(p); // x(u) = u^3 for cubic-bezier(0,1,0,1)
-  return 1 - Math.pow(1 - u, 3);
+  // cubic-bezier(0,0,0,1): x(u)=u^3, y(u)=3u^2-2u^3.
+  const u = Math.cbrt(p);
+  return 3 * u * u - 2 * u * u * u;
 }
 
 function textEntranceAt(time, wordIndex = 0) {
@@ -295,7 +296,7 @@ function textEntranceAt(time, wordIndex = 0) {
   // Frames before the start keyframe are not rendered at all. No opacity animation.
   if (frame + 1e-6 < startFrame) return { visible: false, offset: TEXT_RISE_PX };
   const progress = (frame - startFrame) / TEXT_ENTRANCE_DURATION_FRAMES;
-  const eased = cubicBezier0101(progress);
+  const eased = cubicBezier0001(progress);
   return { visible: true, offset: TEXT_RISE_PX * (1 - eased) };
 }
 
@@ -1420,7 +1421,14 @@ async function exportVideo() {
     // frame whose real timestamp is <= the center of each exact 1/30 s output slot.
     // This avoids random seeking, duplicate-boundary sampling, and unbounded canvas
     // allocation on mobile GPUs.
-    const sinkBase = { width: 1080, height: 1920, fit: 'fill', poolSize: 2 };
+    const mobileDecoderOptions = isMobileExport ? { hardwareAcceleration: 'prefer-software' } : undefined;
+    const sinkBase = {
+      width: 1080,
+      height: 1920,
+      fit: 'fill',
+      poolSize: 2,
+      ...(mobileDecoderOptions ? { decoderOptions: mobileDecoderOptions } : {}),
+    };
     const bgSink = new CanvasSink(bgTrack, sinkBase);
     const fgSink = new CanvasSink(fgTrack, { ...sinkBase, alpha: true });
     const fg2Sink = state.closingLogo && fg2Track ? new CanvasSink(fg2Track, { ...sinkBase, alpha: true }) : null;
@@ -1466,7 +1474,7 @@ async function exportVideo() {
         const mh = await mediaTrack.getDisplayHeight();
         if (mw && mh) state.mediaRatio = mw / mh;
         const mediaDuration = await mediaTrack.computeDuration();
-        const mediaSink = new CanvasSink(mediaTrack, { poolSize: 2 });
+        const mediaSink = new CanvasSink(mediaTrack, { poolSize: 2, ...(mobileDecoderOptions ? { decoderOptions: mobileDecoderOptions } : {}) });
         // Uploaded middle-layer videos may loop. Build each loop as a monotonic
         // timestamp reader, and restart the optimized decoder only at loop boundaries.
         let mediaFirst = 0;
@@ -1505,37 +1513,53 @@ async function exportVideo() {
 
     const target = new BufferTarget();
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-    // High-quality but mobile-decodable AVC. 40 Mbps High@4.1 can itself stutter
-    // on phones during playback even when the file is valid. 18 Mbps VBR at 1080x1920
-    // is visually very high quality while staying well inside common hardware decode
-    // limits. Quality latency mode forbids encoder frame drops.
-    const hqQuality = new Quality({ bitrate: 18_000_000 });
-    const baseVideoConfig = {
+
+    // Mobile workaround: avoid the phone's hardware AVC pipeline entirely when possible.
+    // A software-preferred, low-complexity AVC stream with every frame independently
+    // decodable is much slower to produce, but it removes hardware encoder cadence bugs,
+    // B/P-frame corruption, and decoder dependency chains from the resulting MP4.
+    const desktopQuality = new Quality({ bitrate: 18_000_000 });
+    const mobileQuality = new Quality({ bitrate: 24_000_000, bitrateMode: 'variable' });
+
+    let chosenFullCodecString = isMobileExport ? 'avc1.42E028' : 'avc1.640028';
+    let chosenHardwareAcceleration = 'no-preference';
+
+    if (isMobileExport && typeof canEncodeVideo === 'function') {
+      const mobileCandidates = [
+        { fullCodecString: 'avc1.42E028', hardwareAcceleration: 'prefer-software' }, // Baseline @ L4.0
+        { fullCodecString: 'avc1.4D4028', hardwareAcceleration: 'prefer-software' }, // Main @ L4.0
+        { fullCodecString: 'avc1.42E028', hardwareAcceleration: 'no-preference' },
+        { fullCodecString: 'avc1.4D4028', hardwareAcceleration: 'no-preference' },
+      ];
+      for (const candidate of mobileCandidates) {
+        try {
+          const ok = await canEncodeVideo('avc', {
+            width: 1080,
+            height: 1920,
+            frameRate: fps,
+            quality: mobileQuality,
+            latencyMode: 'quality',
+            fullCodecString: candidate.fullCodecString,
+            hardwareAcceleration: candidate.hardwareAcceleration,
+          });
+          if (ok) {
+            chosenFullCodecString = candidate.fullCodecString;
+            chosenHardwareAcceleration = candidate.hardwareAcceleration;
+            break;
+          }
+        } catch (_) {}
+      }
+    }
+
+    const videoSource = new CanvasSource(renderCanvas, {
       codec: 'avc',
-      quality: hqQuality,
-      keyFrameInterval: 1,
+      quality: isMobileExport ? mobileQuality : desktopQuality,
+      keyFrameInterval: isMobileExport ? frameDuration : 1,
       latencyMode: 'quality',
       contentHint: 'detail',
-    };
-    // Main@4.0 is deliberately preferred on mobile: it is broadly hardware-decodable
-    // while retaining essentially all of the quality benefit of the high bitrate.
-    // Desktop keeps High@4.0 when supported.
-    const preferredCodecString = isMobileExport ? 'avc1.4d0028' : 'avc1.640028';
-    let usePreferredProfile = false;
-    if (typeof canEncodeVideo === 'function') {
-      try {
-        usePreferredProfile = await canEncodeVideo('avc', {
-          width: 1080, height: 1920, frameRate: fps,
-          quality: hqQuality, latencyMode: 'quality',
-          fullCodecString: preferredCodecString,
-        });
-      } catch (_) {}
-    }
-    const videoSource = new CanvasSource(renderCanvas, {
-      ...baseVideoConfig,
-      ...(usePreferredProfile ? { fullCodecString: preferredCodecString } : {}),
+      fullCodecString: chosenFullCodecString,
+      hardwareAcceleration: isMobileExport ? chosenHardwareAcceleration : 'no-preference',
     });
-    // Declare the intended CFR explicitly so timestamps/durations are snapped to 30 fps.
     output.addVideoTrack(videoSource, { frameRate: fps });
 
     let audioSource = null, audioSink = null;
@@ -1556,7 +1580,7 @@ async function exportVideo() {
       audioSource.close();
     }
 
-    $('exportDetail').textContent = 'Rendering synchronized HQ frames…';
+    $('exportDetail').textContent = isMobileExport ? 'Mobile compatibility render — slower, frame-safe…' : 'Rendering synchronized HQ frames…';
 
     for (let i = 0; i < frameCount; i++) {
       const t = i * frameDuration;
@@ -1608,12 +1632,12 @@ async function exportVideo() {
           ctx.globalAlpha = 1;
         }
       }
-      await videoSource.add(t, frameDuration, i % fps === 0 ? { keyFrame: true } : undefined);
+      await videoSource.add(t, frameDuration, (isMobileExport || i % fps === 0) ? { keyFrame: true } : undefined);
 
       const pct = Math.round(((i + 1) / frameCount) * 96);
       $('progressFill').style.width = `${pct}%`;
       $('progressPercent').textContent = `${pct}%`;
-      if (i % 8 === 0) await new Promise(requestAnimationFrame);
+      if (i % (isMobileExport ? 2 : 8) === 0) await new Promise((resolve) => setTimeout(resolve, 0));
     }
     videoSource.close();
     $('exportDetail').textContent = 'Finalizing MP4…';

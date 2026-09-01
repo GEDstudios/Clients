@@ -39,3 +39,10 @@ Upload the project contents to a repository and enable GitHub Pages from the rep
 ## v18.6 mobile export stability
 
 The HQ export path now uses bounded CanvasSink pools, sequential presentation-order decoding, serialized template-layer decoding, audio-first encoding, and a mobile-friendly H.264 Main@4.0 preference. These changes are specifically intended to avoid mobile GPU/codec memory pressure and cadence corruption while preserving 1080x1920 30 fps output.
+
+
+## v18.7 mobile compatibility export
+
+On mobile, export now prefers software decoding and software H.264 encoding, uses a low-complexity AVC profile, and forces every output frame to be a key frame. This is intentionally slower and creates a larger file, but removes inter-frame dependencies and avoids buggy mobile hardware AVC paths. Output remains 1080×1920, 30 fps MP4.
+
+Text entrance position easing is `cubic-bezier(0,0,0,1)`.
