@@ -28,9 +28,9 @@ The bundled fonts are already under `assets/fonts/`.
 ## GitHub Pages
 Upload the project contents to a repository and enable GitHub Pages from the repository root. No build step is required.
 
-
-## v18.4 mobile HQ export
-- Deterministic 30 fps sequential template-frame mapping on every browser (no FPS-metric-dependent fallback).
-- 1080×1920 AVC/H.264 offline quality encoding, up to 40 Mbps with quantizer 14 fallback, High Profile 4.1 when supported.
-- Encoder latency mode is explicitly `quality`; no realtime/drop-frame mode.
-- Standard synchronized render canvas (no desynchronized low-latency hint).
+## v18.5 synchronized preview / scrub / mobile export
+- Text motion in preview is snapped to the same exact 30 fps frame grid used by MP4 export, so entrance and global scale positions match output frames.
+- The playhead is frame-snapped to 1/30 s. While scrubbing, the UI keeps a synchronized composite visible and only updates it after all active video layers have landed on the same requested time.
+- Export no longer assumes one decoded input frame equals one output frame. Each 30 fps output frame is selected from the source videos using their real presentation timestamps through monotonic `canvasesAtTimestamps` decoding.
+- Source videos can therefore be 29.97, 30, 60, or variable-frame-rate without corrupting the output cadence.
+- Mobile AVC output remains 1080×1920 at fixed 30 fps, but uses a mobile-decodable ~18 Mbps VBR quality target and High Profile Level 4.0 only when supported. Encoder latency mode remains `quality` (no intentional frame dropping).

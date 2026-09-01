@@ -292,3 +292,7 @@ svg{fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-
   .side-rich-text{min-height:96px;max-height:150px;font-size:24px;border-radius:11px;padding:12px}
   body.inspector-open .mobile-selection-toolbar.is-visible{display:block!important}
 }
+
+/* Atomic scrub preview: while seeking, keep the last synchronized composite visible
+   until every video layer has landed on the same requested frame. */
+.scrub-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none;object-fit:cover}

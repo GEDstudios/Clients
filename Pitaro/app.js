@@ -59,6 +59,8 @@ const wordByWordToggle = $('wordByWordToggle');
 const bgVideo = $('bgVideo');
 const fgVideo = $('fgVideo');
 const fg2Video = $('fg2Video');
+const scrubCanvas = $('scrubCanvas');
+const scrubCtx = scrubCanvas?.getContext('2d', { alpha: false });
 const closingLogoToggle = $('closingLogoToggle');
 const mediaImage = $('mediaImage');
 const mediaVideo = $('mediaVideo');
@@ -88,6 +90,10 @@ let activeTextEditor = editableText;
 let syncingRichEditors = false;
 let pendingExport = null;
 let previewMasterVideo = bgVideo;
+let scrubActive = false;
+let scrubWorkerRunning = false;
+let scrubPendingTarget = null;
+let scrubFinishRequested = false;
 
 const MOBILE_FONT_LABELS = {
   EzerLight: 'Ezer Light',
@@ -260,6 +266,14 @@ function formatTime(value) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 
+function previewFrameTime(value) {
+  const t = Math.max(0, Number(value) || 0);
+  // Preview motion is evaluated on the same 30 fps frame grid as export.
+  // This prevents the DOM preview from showing 60/120 Hz sub-frame animation
+  // positions that can never exist in the exported MP4.
+  return Math.floor(t * PREVIEW_FPS + 1e-7) / PREVIEW_FPS;
+}
+
 function showToast(message) {
   const toast = $('toast');
   toast.textContent = message;
@@ -417,11 +431,12 @@ function animatedScaleAt(t) {
 }
 
 function applyVisualState(time = Number($('timeline').value) || 0) {
+  const frameTime = previewFrameTime(time);
   object.style.left = `${state.x}%`;
   object.style.top = `${state.y}%`;
   object.style.width = `${(state.width / 1080) * 100}%`;
-  // The automatic scale is a single parent transform, so word staggering never changes scale per word.
-  object.style.transform = `translate(-50%, -50%) scale(${animatedScaleAt(time)})`;
+  // Evaluate preview motion on the same exact 30 fps frame times used by export.
+  object.style.transform = `translate(-50%, -50%) scale(${animatedScaleAt(frameTime)})`;
 
   const unit = stage.clientWidth / 1080;
   for (const layer of [editableText, animatedText]) {
@@ -440,7 +455,7 @@ function applyVisualState(time = Number($('timeline').value) || 0) {
     textContentEditor.style.lineHeight = `${state.lineHeight / 100}`;
     textContentEditor.style.textAlign = state.align;
   }
-  updateTextEntrancePreview(time);
+  updateTextEntrancePreview(frameTime);
 
   $('xField').value = Number(state.x.toFixed(1));
   $('yField').value = Number(state.y.toFixed(1));
@@ -1038,15 +1053,121 @@ function syncAt(t) {
   applyVisualState(safe);
 }
 
-$('timeline').addEventListener('input', (e) => {
-  // Scrubbing is intentionally the same simple pause+seek path as the stable build.
+function scrubTargetForVideo(video, t, loopMedia = false) {
+  if (!video?.src || !Number.isFinite(video.duration) || video.duration <= 0) return null;
+  if (loopMedia) return Math.min(Math.max(0, t % video.duration), Math.max(0, video.duration - 0.001));
+  return Math.min(Math.max(0, t), Math.max(0, video.duration - 0.001));
+}
+
+function seekVideoAndWait(video, target) {
+  if (target == null) return Promise.resolve();
+  if (Math.abs(video.currentTime - target) < 0.0008 && video.readyState >= 2) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      video.removeEventListener('seeked', finish);
+      video.removeEventListener('error', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, 1400);
+    video.addEventListener('seeked', finish, { once: true });
+    video.addEventListener('error', finish, { once: true });
+    try { video.currentTime = target; } catch (_) { finish(); }
+  });
+}
+
+function drawScrubComposite(t) {
+  if (!scrubCtx || !scrubCanvas) return;
+  const w = scrubCanvas.width, h = scrubCanvas.height;
+  scrubCtx.setTransform(1, 0, 0, 1, 0, 0);
+  scrubCtx.globalAlpha = 1;
+  scrubCtx.fillStyle = '#000';
+  scrubCtx.fillRect(0, 0, w, h);
+  try { scrubCtx.drawImage(bgVideo, 0, 0, w, h); } catch (_) {}
+
+  scrubCtx.save();
+  scrubCtx.scale(w / 1080, h / 1920);
+  if (state.mode === 'text') drawTextLayer(scrubCtx, previewFrameTime(t));
+  else if (state.mediaType === 'image' && mediaImage.complete) drawMediaLayer(scrubCtx, mediaImage, previewFrameTime(t));
+  else if (state.mediaType === 'video' && mediaVideo.readyState >= 2) drawMediaLayer(scrubCtx, mediaVideo, previewFrameTime(t));
+  scrubCtx.restore();
+
+  scrubCtx.globalAlpha = 1;
+  try { scrubCtx.drawImage(fgVideo, 0, 0, w, h); } catch (_) {}
+  if (state.closingLogo && state.closingLogoAvailable) {
+    try { scrubCtx.drawImage(fg2Video, 0, 0, w, h); } catch (_) {}
+  }
+}
+
+function beginAtomicScrub() {
+  if (scrubActive) return;
   pausePreview();
-  syncAt(Number(e.target.value));
-});
+  scrubActive = true;
+  drawScrubComposite(Number($('timeline').value) || 0);
+  scrubCanvas?.classList.remove('is-hidden');
+}
+
+async function processScrubQueue() {
+  if (scrubWorkerRunning) return;
+  scrubWorkerRunning = true;
+  try {
+    while (scrubPendingTarget != null) {
+      const t = scrubPendingTarget;
+      scrubPendingTarget = null;
+      const jobs = [
+        seekVideoAndWait(bgVideo, scrubTargetForVideo(bgVideo, t)),
+        seekVideoAndWait(fgVideo, scrubTargetForVideo(fgVideo, t)),
+      ];
+      if (state.closingLogoAvailable) jobs.push(seekVideoAndWait(fg2Video, scrubTargetForVideo(fg2Video, t)));
+      if (state.mode === 'media' && state.mediaType === 'video') jobs.push(seekVideoAndWait(mediaVideo, scrubTargetForVideo(mediaVideo, t, true)));
+      await Promise.all(jobs);
+
+      // If the user moved again while decoding, skip this stale frame and go straight
+      // to the newest request. The visible scrub canvas therefore only ever displays
+      // a composition whose video layers all belong to the same requested time.
+      if (scrubPendingTarget != null) continue;
+
+      $('timeline').value = t;
+      $('timeNow').textContent = formatTime(t);
+      state.lastPreviewTime = t;
+      applyVisualState(t);
+      drawScrubComposite(t);
+    }
+  } finally {
+    scrubWorkerRunning = false;
+    if (scrubFinishRequested && scrubPendingTarget == null) {
+      scrubFinishRequested = false;
+      scrubActive = false;
+      scrubCanvas?.classList.add('is-hidden');
+    }
+  }
+}
+
+function requestAtomicScrub(value, finish = false) {
+  const t = Math.min(Math.max(0, Number(value) || 0), Math.max(0, state.duration));
+  beginAtomicScrub();
+  $('timeline').value = t;
+  $('timeNow').textContent = formatTime(t);
+  applyVisualState(t);
+  scrubPendingTarget = t;
+  if (finish) scrubFinishRequested = true;
+  processScrubQueue();
+}
+
+$('timeline').addEventListener('pointerdown', beginAtomicScrub);
+$('timeline').addEventListener('input', (e) => requestAtomicScrub(e.target.value, false));
+$('timeline').addEventListener('change', (e) => requestAtomicScrub(e.target.value, true));
+$('timeline').addEventListener('pointerup', (e) => requestAtomicScrub(e.target.value, true));
+$('timeline').addEventListener('pointercancel', (e) => requestAtomicScrub(e.target.value, true));
 $('playPause').addEventListener('click', () => previewMasterVideo.paused ? playPreview() : pausePreview());
 
 async function playPreview({ preserveUi = false } = {}) {
   if (!state.templateReady) return;
+  scrubActive = false; scrubPendingTarget = null; scrubFinishRequested = false;
+  scrubCanvas?.classList.add('is-hidden');
   if (!preserveUi) {
     closeMobileInspector();
     object.classList.remove('is-selected');
@@ -1282,41 +1403,49 @@ async function exportVideo() {
     if (state.closingLogo && !fg2Track) throw new Error('fg2.webm needs a readable video track.');
 
     const [bgDuration, fgDuration, fg2Duration] = await Promise.all([
-      bgInput.computeDuration(),
-      fgInput.computeDuration(),
-      fg2Input ? fg2Input.computeDuration() : Promise.resolve(0),
+      bgTrack.computeDuration(),
+      fgTrack.computeDuration(),
+      fg2Track ? fg2Track.computeDuration() : Promise.resolve(0),
     ]);
     const duration = Math.max(bgDuration || 0, fgDuration || 0, fg2Duration || 0);
     const fps = 30;
     const frameDuration = 1 / fps;
     const frameCount = Math.max(1, Math.round(duration * fps));
 
-    // Deterministic CFR template decode: consume exactly one decoded source frame
-    // per 30 fps output frame. This path is intentionally identical on desktop
-    // and mobile so browser FPS-metric support cannot alter export cadence.
+    // Timestamp-correct CFR sampling. `canvasesAtTimestamps` keeps decoding
+    // sequential/optimized, but selects frames from their real presentation timestamps.
+    // Sampling the center of each 1/30 s output interval avoids WebM timestamp
+    // quantization picking the previous frame at boundaries. This works correctly even
+    // when an input is 29.97, 30, 60, or variable-frame-rate.
     const bgSink = new CanvasSink(bgTrack, { width: 1080, height: 1920, fit: 'fill' });
     const fgSink = new CanvasSink(fgTrack, { width: 1080, height: 1920, fit: 'fill', alpha: true });
     const fg2Sink = state.closingLogo && fg2Track ? new CanvasSink(fg2Track, { width: 1080, height: 1920, fit: 'fill', alpha: true }) : null;
 
-    function makeHeldSequentialReader(sink, endTime) {
-      const iterator = sink ? sink.canvases(0, endTime + frameDuration)[Symbol.asyncIterator]() : null;
-      let last = null;
-      let ended = !iterator;
+    async function makeCfrReader(track, sink, endTime) {
+      if (!track || !sink || !(endTime > 0)) return null;
+      let first = 0;
+      try { first = await track.getFirstTimestamp(); } catch (_) {}
+      const last = Math.max(first, endTime - 1e-6);
+      const timestamps = Array.from({ length: frameCount }, (_, i) => {
+        const center = (i + 0.5) * frameDuration;
+        return Math.min(last, Math.max(first, center));
+      });
+      const iterator = sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]();
+      let held = null;
       return {
         async nextFrame() {
-          if (!ended) {
-            const r = await iterator.next();
-            if (!r.done && r.value?.canvas) last = r.value.canvas;
-            else ended = true;
-          }
-          return last;
+          const r = await iterator.next();
+          if (!r.done && r.value?.canvas) held = r.value.canvas;
+          return held;
         }
       };
     }
 
-    const bgReader = makeHeldSequentialReader(bgSink, bgDuration);
-    const fgReader = makeHeldSequentialReader(fgSink, fgDuration);
-    const fg2Reader = fg2Sink ? makeHeldSequentialReader(fg2Sink, fg2Duration) : null;
+    const [bgReader, fgReader, fg2Reader] = await Promise.all([
+      makeCfrReader(bgTrack, bgSink, bgDuration),
+      makeCfrReader(fgTrack, fgSink, fgDuration),
+      fg2Sink ? makeCfrReader(fg2Track, fg2Sink, fg2Duration) : Promise.resolve(null),
+    ]);
 
     let mediaInputExport = null, mediaIterator = null, mediaBitmap = null;
     if (state.mode === 'media' && state.mediaFile) {
@@ -1332,9 +1461,35 @@ async function exportVideo() {
         if (mw && mh) state.mediaRatio = mw / mh;
         const mediaDuration = await mediaTrack.computeDuration();
         const mediaSink = new CanvasSink(mediaTrack);
-        const mediaTimes = Array.from({ length: frameCount }, (_, i) => (i * frameDuration) % Math.max(frameDuration, mediaDuration));
-        // Looping timestamps are not monotonic; getCanvas is safer for the occasional uploaded clip.
-        mediaIterator = { next: async (i) => ({ value: await mediaSink.getCanvas(mediaTimes[i]), done: false }) };
+        // Uploaded middle-layer videos may loop. Build each loop as a monotonic
+        // timestamp reader, and restart the optimized decoder only at loop boundaries.
+        let mediaFirst = 0;
+        try { mediaFirst = await mediaTrack.getFirstTimestamp(); } catch (_) {}
+        let loopIndex = -1, loopIterator = null, heldMedia = null;
+        mediaIterator = {
+          next: async (i) => {
+            const absolute = (i + 0.5) * frameDuration;
+            const nextLoop = Math.floor(absolute / Math.max(frameDuration, mediaDuration));
+            const local = absolute % Math.max(frameDuration, mediaDuration);
+            if (nextLoop !== loopIndex || !loopIterator) {
+              loopIndex = nextLoop;
+              const remainingFrames = Math.min(frameCount - i, Math.ceil(mediaDuration * fps) + 1);
+              const stamps = Array.from({ length: remainingFrames }, (_, j) => {
+                const tt = (local + j * frameDuration) % Math.max(frameDuration, mediaDuration);
+                return Math.min(Math.max(mediaFirst, tt), Math.max(mediaFirst, mediaDuration - 1e-6));
+              });
+              // If wrapping occurs inside this chunk the timestamps cease to be monotonic,
+              // so limit to the current loop.
+              const monotonic = [];
+              let prev = -Infinity;
+              for (const stamp of stamps) { if (stamp + 1e-9 < prev) break; monotonic.push(stamp); prev = stamp; }
+              loopIterator = mediaSink.canvasesAtTimestamps(monotonic)[Symbol.asyncIterator]();
+            }
+            const r = await loopIterator.next();
+            if (!r.done && r.value?.canvas) heldMedia = r.value;
+            return { value: heldMedia, done: false };
+          }
+        };
       }
     }
 
@@ -1344,16 +1499,16 @@ async function exportVideo() {
 
     const target = new BufferTarget();
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
-    // HQ offline AVC. Prefer High Profile 4.1 where the device supports it;
-    // otherwise retain the same high-quality rate control with the browser's
-    // compatible AVC profile. Quality mode does not permit encoder frame drops.
-    const hqQuality = new Quality({ quantizer: 14, bitrate: 40_000_000 });
+    // High-quality but mobile-decodable AVC. 40 Mbps High@4.1 can itself stutter
+    // on phones during playback even when the file is valid. 18 Mbps VBR at 1080x1920
+    // is visually very high quality while staying well inside common hardware decode
+    // limits. Quality latency mode forbids encoder frame drops.
+    const hqQuality = new Quality({ bitrate: 18_000_000 });
     const baseVideoConfig = {
       codec: 'avc',
       quality: hqQuality,
       keyFrameInterval: 2,
       latencyMode: 'quality',
-      hardwareAcceleration: 'prefer-hardware',
       contentHint: 'detail',
     };
     let useHighProfile = false;
@@ -1362,14 +1517,13 @@ async function exportVideo() {
         useHighProfile = await canEncodeVideo('avc', {
           width: 1080, height: 1920, frameRate: fps,
           quality: hqQuality, latencyMode: 'quality',
-          hardwareAcceleration: 'prefer-hardware',
-          fullCodecString: 'avc1.640029',
+          fullCodecString: 'avc1.640028',
         });
       } catch (_) {}
     }
     const videoSource = new CanvasSource(renderCanvas, {
       ...baseVideoConfig,
-      ...(useHighProfile ? { fullCodecString: 'avc1.640029' } : {}),
+      ...(useHighProfile ? { fullCodecString: 'avc1.640028' } : {}),
     });
     // Declare the intended CFR explicitly so timestamps/durations are snapped to 30 fps.
     output.addVideoTrack(videoSource, { frameRate: fps });
@@ -1383,7 +1537,7 @@ async function exportVideo() {
     }
 
     await output.start();
-    $('exportDetail').textContent = 'Rendering HQ frames…';
+    $('exportDetail').textContent = 'Rendering synchronized HQ frames…';
 
     const audioPromise = (async () => {
       if (!audioSource || !audioSink) return;
