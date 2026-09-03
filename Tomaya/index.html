@@ -14,6 +14,10 @@
   }
   canvas#c { display: block; width: 100vw; height: 100vh; }
 
+  /* Standalone exports keep the runtime but show only the vortex itself. */
+  html.export-only .panel,
+  html.export-only .toggle { display: none !important; }
+
   .dive {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
     padding: 14px 30px; font-size: 16px; color: var(--ink);
@@ -117,13 +121,86 @@
 </head>
 <body>
 <canvas id="c" width="822" height="1612"></canvas>
+<button class="dive" id="dive">Dive in</button>
+<button class="toggle" id="toggle" aria-label="Toggle controls" title="Toggle controls (H)">☰</button>
 
-
-
-
-<script>window.__VORTEX_EXPORT__ = true; window.__VORTEX_SETTINGS__ = {"rFrac":0.455,"uSpawn":1.03,"fadeIn":0.11,"uRim":1.02,"uFloor":0.32,"q":0.69,"span0":0.6,"span1":0,"v0":0.071,"v1":1.38,"vp":1.95,"spd0":0.74,"spd1":1.64,"swirl":0.06,"swirlGain":2.1,"timeScale":1.01,"density":1750,"size":0.0128,"sizeSpread":0.27,"br0":0.94,"br1":0.45,"brGamma":0.7,"churn":0.0175,"repelR":1.03,"repelForce":2000,"repelFalloff":3,"repelReturn":0.19,"cursorSwirl":0,"exposure":1,"trail":0,"additive":false,"autoThrottle":true,"glyphColor":"#ffffff","bgColor":"#040404","charset":"custom","customChars":"TOMAYA"};</script><script>
+<div class="panel" id="panel">
+  <div class="phead">
+    <h1>Vortex</h1>
+    <div class="stat" id="stat">60 fps · 699</div>
+  </div>
+  <div class="pbody" id="pbody"><details open=""><summary>Ring</summary><div class="grp"><div class="row" title="Outer edge as a fraction of the short side"><div class="rlab"><span>Rim radius</span><b id="v_rFrac">0.455</b></div><input type="range" min="0.15" max="0.7" step="0.005" aria-label="Rim radius"></div><div class="row" title="Where glyphs first appear"><div class="rlab"><span>Spawn radius</span><b id="v_uSpawn">1.030</b></div><input type="range" min="0.7" max="1.3" step="0.005" aria-label="Spawn radius"></div><div class="row" title="How fast a glyph reaches full strength at the rim"><div class="rlab"><span>Resolve width</span><b id="v_fadeIn">0.110</b></div><input type="range" min="0.005" max="0.4" step="0.005" aria-label="Resolve width"></div><div class="row" title="Upper bound on where glyphs give out"><div class="rlab"><span>Dissolve start</span><b id="v_uRim">1.020</b></div><input type="range" min="0.3" max="1.2" step="0.005" aria-label="Dissolve start"></div><div class="row" title="Deepest any glyph survives — sets the hole"><div class="rlab"><span>Dissolve floor</span><b id="v_uFloor">0.320</b></div><input type="range" min="0.02" max="0.9" step="0.005" aria-label="Dissolve floor"></div><div class="row" title="Low values send more glyphs deep; high values kill them early"><div class="rlab"><span>Depth skew</span><b id="v_q">0.69</b></div><input type="range" min="0.05" max="3" step="0.01" aria-label="Depth skew"></div><div class="row" title="How much radius a glyph takes to fade out"><div class="rlab"><span>Dissolve length</span><b id="v_span0">0.600</b></div><input type="range" min="0.01" max="0.6" step="0.005" aria-label="Dissolve length"></div><div class="row" title="Variation in that fade length"><div class="rlab"><span>Dissolve spread</span><b id="v_span1">0.000</b></div><input type="range" min="0" max="0.6" step="0.005" aria-label="Dissolve spread"></div></div></details><details open=""><summary>Motion</summary><div class="grp"><div class="row" title="Drift rate out at the edge"><div class="rlab"><span>Rim speed</span><b id="v_v0">0.071</b></div><input type="range" min="0" max="0.4" step="0.001" aria-label="Rim speed"></div><div class="row" title="Extra speed gained falling inward"><div class="rlab"><span>Core pull</span><b id="v_v1">0.635</b></div><input type="range" min="0" max="1.5" step="0.005" aria-label="Core pull"></div><div class="row" title="Below 1 pulls early, above 1 pulls late and hard"><div class="rlab"><span>Pull curve</span><b id="v_vp">1.95</b></div><input type="range" min="0.2" max="4" step="0.01" aria-label="Pull curve"></div><div class="row" title="Per-glyph speed floor"><div class="rlab"><span>Speed base</span><b id="v_spd0">0.74</b></div><input type="range" min="0.1" max="2" step="0.01" aria-label="Speed base"></div><div class="row" title="Per-glyph speed variation"><div class="rlab"><span>Speed spread</span><b id="v_spd1">1.39</b></div><input type="range" min="0" max="2" step="0.01" aria-label="Speed spread"></div><div class="row" title="Rotation. Zero matches the reference"><div class="rlab"><span>Swirl</span><b id="v_swirl">0.06</b></div><input type="range" min="-1.5" max="1.5" step="0.01" aria-label="Swirl"></div><div class="row" title="How much faster the swirl runs near the middle"><div class="rlab"><span>Swirl core gain</span><b id="v_swirlGain">2.10</b></div><input type="range" min="0" max="6" step="0.05" aria-label="Swirl core gain"></div><div class="row" title="Global speed. Zero freezes the field"><div class="rlab"><span>Time scale</span><b id="v_timeScale">1.01</b></div><input type="range" min="0" max="3" step="0.01" aria-label="Time scale"></div></div></details><details open=""><summary>Glyphs</summary><div class="grp"><div class="row" title="Glyphs per square pixel of rim radius"><div class="rlab"><span>Density</span><b id="v_density">0.0200</b></div><input type="range" min="0.0005" max="0.03" step="0.0005" aria-label="Density"></div><div class="row" title="Glyph size as a fraction of the short side"><div class="rlab"><span>Size</span><b id="v_size">0.0128</b></div><input type="range" min="0.002" max="0.04" step="0.0002" aria-label="Size"></div><div class="row" title="Log-normal spread of glyph sizes"><div class="rlab"><span>Size spread</span><b id="v_sizeSpread">0.27</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Size spread"></div><div class="row" title="Dimmest a glyph can be"><div class="rlab"><span>Brightness floor</span><b id="v_br0">0.94</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Brightness floor"></div><div class="row" title="Spread above that floor"><div class="rlab"><span>Brightness range</span><b id="v_br1">0.45</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Brightness range"></div><div class="row" title="Below 1 favours bright, above 1 favours dim"><div class="rlab"><span>Brightness skew</span><b id="v_brGamma">0.70</b></div><input type="range" min="0.1" max="3" step="0.01" aria-label="Brightness skew"></div><div class="row" title="Chance per frame a glyph changes character"><div class="rlab"><span>Character churn</span><b id="v_churn">0.0018</b></div><input type="range" min="0" max="0.02" step="0.0005" aria-label="Character churn"></div></div></details><details open=""><summary>Cursor</summary><div class="grp"><div class="row" title="Reach of the cursor, relative to the rim"><div class="rlab"><span>Field radius</span><b id="v_repelR">1.00</b></div><input type="range" min="0" max="1.2" step="0.01" aria-label="Field radius"></div><div class="row" title="Positive pushes away, negative pulls in"><div class="rlab"><span>Force</span><b id="v_repelForce">2000</b></div><input type="range" min="-2000" max="2000" step="10" aria-label="Force"></div><div class="row" title="Higher values concentrate the effect at the centre"><div class="rlab"><span>Falloff</span><b id="v_repelFalloff">3.00</b></div><input type="range" min="0.5" max="5" step="0.05" aria-label="Falloff"></div><div class="row" title="How quickly glyphs settle back"><div class="rlab"><span>Return speed</span><b id="v_repelReturn">0.19</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Return speed"></div><div class="row" title="Stirs glyphs around the cursor instead of away"><div class="rlab"><span>Tangential</span><b id="v_cursorSwirl">0</b></div><input type="range" min="-1500" max="1500" step="10" aria-label="Tangential"></div></div></details><details open=""><summary>Render</summary><div class="grp"><div class="row" title="Overall brightness multiplier"><div class="rlab"><span>Exposure</span><b id="v_exposure">1.00</b></div><input type="range" min="0.1" max="3" step="0.01" aria-label="Exposure"></div><div class="row" title="Persistence of previous frames"><div class="rlab"><span>Trails</span><b id="v_trail">0.00</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Trails"></div>
+        <label class="chk"><input type="checkbox" id="cAdd"> Additive blending</label>
+        <label class="chk"><input type="checkbox" id="cThr" checked=""> Auto-throttle for frame rate</label>
+        <div class="sel"><span>Character set</span>
+          <select id="sChars">
+            <option value="alnum">Letters + digits</option>
+            <option value="letters">Letters</option>
+            <option value="digits">Digits</option>
+            <option value="hex">Hex</option>
+            <option value="binary">Binary</option>
+            <option value="code">Code</option>
+            <option value="kana">Katakana</option>
+            <option value="custom">Custom</option>
+          </select></div>
+        <div class="sel"><span>Custom text</span><input type="text" id="tChars" value="TOMAYA" maxlength="200" spellcheck="false" aria-label="Custom characters"></div>
+        <div class="sel"><span>Glyph colour</span><input type="color" id="cGlyph" value="#ffffff"></div>
+        <div class="sel"><span>Background</span><input type="color" id="cBg" value="#040404"></div></div></details></div>
+  <div class="pfoot">
+    <button id="bReset">Reset</button>
+    <button id="bRandom">Randomise</button>
+    <button id="bCopy">Copy settings</button>
+    <button id="bExport">Export index.html</button>
+  </div>
+</div>
+<script>
 (() => {
   'use strict';
+
+  /* =================================================================
+     Export mode. The editor exports itself with these two constants
+     replaced, so the result remains a single self-contained HTML file.
+  ================================================================= */
+  const EXPORT_ONLY = true;
+  const EXPORT_SETTINGS = {
+  "rFrac": 0.455,
+  "uSpawn": 1.03,
+  "fadeIn": 0.11,
+  "uRim": 1.02,
+  "uFloor": 0.32,
+  "q": 0.69,
+  "span0": 0.6,
+  "span1": 0,
+  "v0": 0.071,
+  "v1": 0.635,
+  "vp": 1.95,
+  "spd0": 0.74,
+  "spd1": 1.39,
+  "swirl": 0.06,
+  "swirlGain": 2.1,
+  "timeScale": 1.01,
+  "density": 0.02,
+  "size": 0.0128,
+  "sizeSpread": 0.27,
+  "br0": 0.94,
+  "br1": 0.45,
+  "brGamma": 0.7,
+  "churn": 0.0018,
+  "repelR": 1,
+  "repelForce": 2000,
+  "repelFalloff": 3,
+  "repelReturn": 0.19,
+  "cursorSwirl": 0,
+  "exposure": 1,
+  "trail": 0,
+  "additive": false,
+  "autoThrottle": false,
+  "glyphColor": "#ffffff",
+  "bgColor": "#040404",
+  "charset": "custom",
+  "customChars": "TOMAYA"
+};
+  if (EXPORT_ONLY) document.documentElement.classList.add('export-only');
 
   /* =================================================================
      Default look. "Reset" restores exactly these values.
@@ -135,15 +212,15 @@
     v0: 0.071, v1: 0.635, vp: 1.95,
     spd0: 0.74, spd1: 1.39,
     swirl: 0.06, swirlGain: 2.1, timeScale: 1.01,
-    density: 200, size: 0.0128, sizeSpread: 0.27,
+    density: 0.020, size: 0.0128, sizeSpread: 0.27,
     br0: 0.94, br1: 0.45, brGamma: 0.70, churn: 0.0018,
     repelR: 1, repelForce: 2000, repelFalloff: 3, repelReturn: 0.19, cursorSwirl: 0,
     exposure: 1, trail: 0, additive: false, autoThrottle: true,
     glyphColor: '#ffffff', bgColor: '#040404',
     charset: 'custom', customChars: 'TOMAYA'
   };;;
-  const EXPORT_MODE = !!window.__VORTEX_EXPORT__;
-  const P = Object.assign({}, FIT, window.__VORTEX_SETTINGS__ || {});
+  const P = Object.assign({}, FIT);
+  if (EXPORT_SETTINGS) Object.assign(P, EXPORT_SETTINGS);
 
   const CHARSETS = {
     alnum:  'ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789+-=<>()[].,/',
@@ -255,7 +332,7 @@
   /* ---------------- viewport ---------------- */
   let W = 0, H = 0, cx = 0, cy = 0, R = 1, base = 1, target = 1000, active = 1000;
   function recount() {
-    target = Math.max(50, Math.min(MAX, Math.round(P.density)));
+    target = Math.max(50, Math.min(MAX, Math.round(P.density * R * R)));
     if (!P.autoThrottle || active > target) active = target;
   }
   function resize() {
@@ -274,7 +351,7 @@
   /* ---------------- pointer ---------------- */
   let mx = -9e9, my = -9e9, hasPointer = false;
   function onMove(e) {
-    if (e.target && e.target.closest && e.target.closest('.panel, .toggle')) { hasPointer = false; return; }
+    if (!EXPORT_ONLY && e.target && e.target.closest && e.target.closest('.panel, .toggle')) { hasPointer = false; return; }
     mx = e.clientX; my = e.clientY; hasPointer = true;
   }
   addEventListener('pointermove', onMove, { passive: true });
@@ -377,7 +454,7 @@
 
     if (now - statT > 400) {
       statT = now; fps = Math.round(1000 / Math.max(frameAvg, 0.01));
-      if (statEl) statEl.textContent = fps + ' fps · ' + active;
+      statEl.textContent = fps + ' fps · ' + active;
     }
     requestAnimationFrame(frame);
   }
@@ -393,193 +470,202 @@
      it invalidates: derived per-particle values, the speed table,
      the particle budget, the viewport, or the glyph atlas.
   ================================================================= */
-  if (!EXPORT_MODE) {
-    const SPEC = [
-      ['Ring', [
-        ['rFrac',   'Rim radius',      0.15, 0.70, 0.005, 'view',   'Outer edge as a fraction of the short side'],
-        ['uSpawn',  'Spawn radius',    0.70, 1.30, 0.005, 'derive', 'Where glyphs first appear'],
-        ['fadeIn',  'Resolve width',   0.005, 0.40, 0.005, null,    'How fast a glyph reaches full strength at the rim'],
-        ['uRim',    'Dissolve start',  0.30, 1.20, 0.005, 'derive', 'Upper bound on where glyphs give out'],
-        ['uFloor',  'Dissolve floor',  0.02, 0.90, 0.005, 'derive', 'Deepest any glyph survives — sets the hole'],
-        ['q',       'Depth skew',      0.05, 3.00, 0.010, 'derive', 'Low values send more glyphs deep; high values kill them early'],
-        ['span0',   'Dissolve length', 0.01, 0.60, 0.005, 'derive', 'How much radius a glyph takes to fade out'],
-        ['span1',   'Dissolve spread', 0.00, 0.60, 0.005, 'derive', 'Variation in that fade length']
-      ]],
-      ['Motion', [
-        ['v0',        'Rim speed',      0.00, 0.40, 0.001, 'lut',  'Drift rate out at the edge'],
-        ['v1',        'Core pull',      0.00, 1.50, 0.005, 'lut',  'Extra speed gained falling inward'],
-        ['vp',        'Pull curve',     0.20, 4.00, 0.010, 'lut',  'Below 1 pulls early, above 1 pulls late and hard'],
-        ['spd0',      'Speed base',     0.10, 2.00, 0.010, 'derive', 'Per-glyph speed floor'],
-        ['spd1',      'Speed spread',   0.00, 2.00, 0.010, 'derive', 'Per-glyph speed variation'],
-        ['swirl',     'Swirl',         -1.50, 1.50, 0.010, null,   'Rotation. Zero matches the reference'],
-        ['swirlGain', 'Swirl core gain', 0.0, 6.00, 0.050, null,   'How much faster the swirl runs near the middle'],
-        ['timeScale', 'Time scale',     0.00, 3.00, 0.010, null,   'Global speed. Zero freezes the field']
-      ]],
-      ['Glyphs', [
-        ['density',    'Density',       50, 6000, 10, 'count',  'Number of active glyphs'],
-        ['size',       'Size',          0.002, 0.040, 0.0002, 'view',   'Glyph size as a fraction of the short side'],
-        ['sizeSpread', 'Size spread',   0.00, 1.00, 0.010, 'derive',   'Log-normal spread of glyph sizes'],
-        ['br0',        'Brightness floor', 0.00, 1.00, 0.010, 'derive', 'Dimmest a glyph can be'],
-        ['br1',        'Brightness range', 0.00, 1.00, 0.010, 'derive', 'Spread above that floor'],
-        ['brGamma',    'Brightness skew',  0.10, 3.00, 0.010, 'derive', 'Below 1 favours bright, above 1 favours dim'],
-        ['churn',      'Character churn',  0.00, 0.020, 0.0005, null,   'Chance per frame a glyph changes character']
-      ]],
-      ['Cursor', [
-        ['repelR',      'Field radius',  0.00, 1.20, 0.010, null, 'Reach of the cursor, relative to the rim'],
-        ['repelForce',  'Force',        -2000, 2000, 10,    null, 'Positive pushes away, negative pulls in'],
-        ['repelFalloff','Falloff',       0.50, 5.00, 0.050, null, 'Higher values concentrate the effect at the centre'],
-        ['repelReturn', 'Return speed',  0.00, 1.00, 0.010, null, 'How quickly glyphs settle back'],
-        ['cursorSwirl', 'Tangential',   -1500, 1500, 10,    null, 'Stirs glyphs around the cursor instead of away']
-      ]],
-      ['Render', [
-        ['exposure', 'Exposure', 0.10, 3.00, 0.010, null, 'Overall brightness multiplier'],
-        ['trail',    'Trails',   0.00, 1.00, 0.010, null, 'Persistence of previous frames']
-      ]]
-    ];
+  const SPEC = [
+    ['Ring', [
+      ['rFrac',   'Rim radius',      0.15, 0.70, 0.005, 'view',   'Outer edge as a fraction of the short side'],
+      ['uSpawn',  'Spawn radius',    0.70, 1.30, 0.005, 'derive', 'Where glyphs first appear'],
+      ['fadeIn',  'Resolve width',   0.005, 0.40, 0.005, null,    'How fast a glyph reaches full strength at the rim'],
+      ['uRim',    'Dissolve start',  0.30, 1.20, 0.005, 'derive', 'Upper bound on where glyphs give out'],
+      ['uFloor',  'Dissolve floor',  0.02, 0.90, 0.005, 'derive', 'Deepest any glyph survives — sets the hole'],
+      ['q',       'Depth skew',      0.05, 3.00, 0.010, 'derive', 'Low values send more glyphs deep; high values kill them early'],
+      ['span0',   'Dissolve length', 0.01, 0.60, 0.005, 'derive', 'How much radius a glyph takes to fade out'],
+      ['span1',   'Dissolve spread', 0.00, 0.60, 0.005, 'derive', 'Variation in that fade length']
+    ]],
+    ['Motion', [
+      ['v0',        'Rim speed',      0.00, 0.40, 0.001, 'lut',  'Drift rate out at the edge'],
+      ['v1',        'Core pull',      0.00, 1.50, 0.005, 'lut',  'Extra speed gained falling inward'],
+      ['vp',        'Pull curve',     0.20, 4.00, 0.010, 'lut',  'Below 1 pulls early, above 1 pulls late and hard'],
+      ['spd0',      'Speed base',     0.10, 2.00, 0.010, 'derive', 'Per-glyph speed floor'],
+      ['spd1',      'Speed spread',   0.00, 2.00, 0.010, 'derive', 'Per-glyph speed variation'],
+      ['swirl',     'Swirl',         -1.50, 1.50, 0.010, null,   'Rotation. Zero matches the reference'],
+      ['swirlGain', 'Swirl core gain', 0.0, 6.00, 0.050, null,   'How much faster the swirl runs near the middle'],
+      ['timeScale', 'Time scale',     0.00, 3.00, 0.010, null,   'Global speed. Zero freezes the field']
+    ]],
+    ['Glyphs', [
+      ['density',    'Density',       0.0005, 0.030, 0.0005, 'count',  'Glyphs per square pixel of rim radius'],
+      ['size',       'Size',          0.002, 0.040, 0.0002, 'view',   'Glyph size as a fraction of the short side'],
+      ['sizeSpread', 'Size spread',   0.00, 1.00, 0.010, 'derive',   'Log-normal spread of glyph sizes'],
+      ['br0',        'Brightness floor', 0.00, 1.00, 0.010, 'derive', 'Dimmest a glyph can be'],
+      ['br1',        'Brightness range', 0.00, 1.00, 0.010, 'derive', 'Spread above that floor'],
+      ['brGamma',    'Brightness skew',  0.10, 3.00, 0.010, 'derive', 'Below 1 favours bright, above 1 favours dim'],
+      ['churn',      'Character churn',  0.00, 0.020, 0.0005, null,   'Chance per frame a glyph changes character']
+    ]],
+    ['Cursor', [
+      ['repelR',      'Field radius',  0.00, 1.20, 0.010, null, 'Reach of the cursor, relative to the rim'],
+      ['repelForce',  'Force',        -2000, 2000, 10,    null, 'Positive pushes away, negative pulls in'],
+      ['repelFalloff','Falloff',       0.50, 5.00, 0.050, null, 'Higher values concentrate the effect at the centre'],
+      ['repelReturn', 'Return speed',  0.00, 1.00, 0.010, null, 'How quickly glyphs settle back'],
+      ['cursorSwirl', 'Tangential',   -1500, 1500, 10,    null, 'Stirs glyphs around the cursor instead of away']
+    ]],
+    ['Render', [
+      ['exposure', 'Exposure', 0.10, 3.00, 0.010, null, 'Overall brightness multiplier'],
+      ['trail',    'Trails',   0.00, 1.00, 0.010, null, 'Persistence of previous frames']
+    ]]
+  ];
 
-    const body = document.getElementById('pbody');
-    const inputs = {};
+  const body = document.getElementById('pbody');
+  const inputs = {};
 
-    function fmt(v, step) {
-      if (step >= 1) return String(Math.round(v));
-      const dp = Math.min(4, String(step).split('.')[1].length);
-      return v.toFixed(dp);
-    }
+  function fmt(v, step) {
+    if (step >= 1) return String(Math.round(v));
+    const dp = Math.min(4, String(step).split('.')[1].length);
+    return v.toFixed(dp);
+  }
 
-    function apply(action) {
-      if (action === 'derive') deriveAll();
-      else if (action === 'lut') buildLut();
-      else if (action === 'count') recount();
-      else if (action === 'view') resize();
-      else if (action === 'atlas') buildAtlas();
-    }
+  function apply(action) {
+    if (action === 'derive') deriveAll();
+    else if (action === 'lut') buildLut();
+    else if (action === 'count') recount();
+    else if (action === 'view') resize();
+    else if (action === 'atlas') buildAtlas();
+  }
 
-    SPEC.forEach(([group, rows], gi) => {
-      const d = document.createElement('details');
-      if (gi < 4) d.open = true;
-      d.innerHTML = `<summary>${group}</summary>`;
-      const wrap = document.createElement('div');
-      wrap.className = 'grp';
-      rows.forEach(([key, label, min, max, step, action, hint]) => {
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.title = hint;
-        row.innerHTML =
-          `<div class="rlab"><span>${label}</span><b id="v_${key}">${fmt(P[key], step)}</b></div>`;
-        const inp = document.createElement('input');
-        inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = P[key];
-        inp.setAttribute('aria-label', label);
-        inp.addEventListener('input', () => {
-          P[key] = parseFloat(inp.value);
-          document.getElementById('v_' + key).textContent = fmt(P[key], step);
-          apply(action);
-        });
-        inputs[key] = { el: inp, step, action };
-        row.appendChild(inp);
-        wrap.appendChild(row);
+  SPEC.forEach(([group, rows], gi) => {
+    const d = document.createElement('details');
+    if (gi < 4) d.open = true;
+    d.innerHTML = `<summary>${group}</summary>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'grp';
+    rows.forEach(([key, label, min, max, step, action, hint]) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.title = hint;
+      row.innerHTML =
+        `<div class="rlab"><span>${label}</span><b id="v_${key}">${fmt(P[key], step)}</b></div>`;
+      const inp = document.createElement('input');
+      inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = P[key];
+      inp.setAttribute('aria-label', label);
+      inp.addEventListener('input', () => {
+        P[key] = parseFloat(inp.value);
+        document.getElementById('v_' + key).textContent = fmt(P[key], step);
+        apply(action);
       });
-
-      if (group === 'Render') {
-        wrap.insertAdjacentHTML('beforeend', `
-          <label class="chk"><input type="checkbox" id="cAdd"> Additive blending</label>
-          <label class="chk"><input type="checkbox" id="cThr" checked> Auto-throttle for frame rate</label>
-          <div class="sel"><span>Character set</span>
-            <select id="sChars">
-              <option value="alnum">Letters + digits</option>
-              <option value="letters">Letters</option>
-              <option value="digits">Digits</option>
-              <option value="hex">Hex</option>
-              <option value="binary">Binary</option>
-              <option value="code">Code</option>
-              <option value="kana">Katakana</option>
-              <option value="custom">Custom</option>
-            </select></div>
-          <div class="sel"><span>Custom text</span><input type="text" id="tChars"
-               value="TOMAYA" maxlength="200" spellcheck="false" aria-label="Custom characters"></div>
-          <div class="sel"><span>Glyph colour</span><input type="color" id="cGlyph" value="#ffffff"></div>
-          <div class="sel"><span>Background</span><input type="color" id="cBg" value="#040404"></div>`);
-      }
-      d.appendChild(wrap);
-      body.appendChild(d);
+      inputs[key] = { el: inp, step, action };
+      row.appendChild(inp);
+      wrap.appendChild(row);
     });
 
-    const cAdd = document.getElementById('cAdd'), cThr = document.getElementById('cThr');
-    const sChars = document.getElementById('sChars');
-    const cGlyph = document.getElementById('cGlyph'), cBg = document.getElementById('cBg');
-    cAdd.addEventListener('change', () => { P.additive = cAdd.checked; });
-    cThr.addEventListener('change', () => { P.autoThrottle = cThr.checked; if (!P.autoThrottle) active = target; });
-    const tChars = document.getElementById('tChars');
-    sChars.addEventListener('change', () => { P.charset = sChars.value; buildAtlas(); });
-    tChars.addEventListener('input', () => {
-      P.customChars = tChars.value;
-      if (P.charset !== 'custom') { P.charset = 'custom'; sChars.value = 'custom'; }
-      buildAtlas();
-    });
-    cGlyph.addEventListener('input', () => { P.glyphColor = cGlyph.value; buildAtlas(); });
-    cBg.addEventListener('input', () => { P.bgColor = cBg.value; document.body.style.background = P.bgColor; });
-
-    function syncUI() {
-      for (const k in inputs) {
-        inputs[k].el.value = P[k];
-        document.getElementById('v_' + k).textContent = fmt(P[k], inputs[k].step);
-      }
-      cAdd.checked = P.additive; cThr.checked = P.autoThrottle;
-      sChars.value = P.charset; tChars.value = P.customChars;
-      cGlyph.value = P.glyphColor; cBg.value = P.bgColor;
-      document.body.style.background = P.bgColor;
-      deriveAll(); buildLut(); buildAtlas(); resize();
+    if (group === 'Render') {
+      wrap.insertAdjacentHTML('beforeend', `
+        <label class="chk"><input type="checkbox" id="cAdd"> Additive blending</label>
+        <label class="chk"><input type="checkbox" id="cThr" checked> Auto-throttle for frame rate</label>
+        <div class="sel"><span>Character set</span>
+          <select id="sChars">
+            <option value="alnum">Letters + digits</option>
+            <option value="letters">Letters</option>
+            <option value="digits">Digits</option>
+            <option value="hex">Hex</option>
+            <option value="binary">Binary</option>
+            <option value="code">Code</option>
+            <option value="kana">Katakana</option>
+            <option value="custom">Custom</option>
+          </select></div>
+        <div class="sel"><span>Custom text</span><input type="text" id="tChars"
+             value="TOMAYA" maxlength="200" spellcheck="false" aria-label="Custom characters"></div>
+        <div class="sel"><span>Glyph colour</span><input type="color" id="cGlyph" value="#ffffff"></div>
+        <div class="sel"><span>Background</span><input type="color" id="cBg" value="#040404"></div>`);
     }
+    d.appendChild(wrap);
+    body.appendChild(d);
+  });
 
-    document.getElementById('bReset').addEventListener('click', () => {
-      Object.assign(P, FIT); syncUI();
-    });
+  const cAdd = document.getElementById('cAdd'), cThr = document.getElementById('cThr');
+  const sChars = document.getElementById('sChars');
+  const cGlyph = document.getElementById('cGlyph'), cBg = document.getElementById('cBg');
+  cAdd.addEventListener('change', () => { P.additive = cAdd.checked; });
+  cThr.addEventListener('change', () => { P.autoThrottle = cThr.checked; if (!P.autoThrottle) active = target; });
+  const tChars = document.getElementById('tChars');
+  sChars.addEventListener('change', () => { P.charset = sChars.value; buildAtlas(); });
+  tChars.addEventListener('input', () => {
+    P.customChars = tChars.value;
+    if (P.charset !== 'custom') { P.charset = 'custom'; sChars.value = 'custom'; }
+    buildAtlas();
+  });
+  cGlyph.addEventListener('input', () => { P.glyphColor = cGlyph.value; buildAtlas(); });
+  cBg.addEventListener('input', () => { P.bgColor = cBg.value; document.body.style.background = P.bgColor; });
 
-    document.getElementById('bRandom').addEventListener('click', () => {
-      const r = (a, b) => a + Math.random() * (b - a);
-      Object.assign(P, {
-        uRim: r(0.55, 1.0), uFloor: r(0.08, 0.55), q: r(0.15, 1.6),
-        span0: r(0.04, 0.35), span1: r(0, 0.25), fadeIn: r(0.02, 0.2),
-        v0: r(0.02, 0.14), v1: r(0.05, 0.7), vp: r(0.5, 2.6),
-        sizeSpread: r(0.1, 0.6), brGamma: r(0.4, 1.8),
-        swirl: Math.random() < 0.5 ? 0 : r(-0.5, 0.5)
-      });
-      if (P.uFloor > P.uRim - 0.05) P.uFloor = P.uRim - 0.05;
-      syncUI();
-    });
-
-    document.getElementById('bCopy').addEventListener('click', async (e) => {
-      const txt = JSON.stringify(P, null, 2);
-      try { await navigator.clipboard.writeText(txt); e.target.textContent = 'Copied'; }
-      catch { e.target.textContent = 'Copy blocked'; console.log(txt); }
-      setTimeout(() => { e.target.textContent = 'Copy settings'; }, 1400);
-    });
-
-    document.getElementById('bExport').addEventListener('click', () => {
-      const root = document.documentElement.cloneNode(true);
-      root.querySelectorAll('#panel, #toggle, #dive').forEach(el => el.remove());
-
-      const scripts = root.querySelectorAll('body > script');
-      const mainScript = scripts[scripts.length - 1];
-      const config = document.createElement('script');
-      const safeSettings = JSON.stringify(P).replace(/<\/script/gi, '<\\/script').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-    config.textContent = 'window.__VORTEX_EXPORT__ = true; window.__VORTEX_SETTINGS__ = ' + safeSettings + ';';
-      mainScript.parentNode.insertBefore(config, mainScript);
-
-      const html = '<!DOCTYPE html>\n' + root.outerHTML;
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'index.html';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
-
-    const panel = document.getElementById('panel');
-    function togglePanel() {
-      const hidden = panel.hasAttribute('hidden-panel');
-      if (hidden) panel.removeAttribute('hidden-panel'); else panel.setAttribute('hidden-panel', '');
+  function syncUI() {
+    for (const k in inputs) {
+      inputs[k].el.value = P[k];
+      document.getElementById('v_' + k).textContent = fmt(P[k], inputs[k].step);
     }
-    document.getElementById('toggle').addEventListener('click', togglePanel);
+    cAdd.checked = P.additive; cThr.checked = P.autoThrottle;
+    sChars.value = P.charset; tChars.value = P.customChars;
+    cGlyph.value = P.glyphColor; cBg.value = P.bgColor;
+    document.body.style.background = P.bgColor;
+    deriveAll(); buildLut(); buildAtlas(); resize();
+  }
+
+  document.getElementById('bReset').addEventListener('click', () => {
+    Object.assign(P, FIT); syncUI();
+  });
+
+  document.getElementById('bRandom').addEventListener('click', () => {
+    const r = (a, b) => a + Math.random() * (b - a);
+    Object.assign(P, {
+      uRim: r(0.55, 1.0), uFloor: r(0.08, 0.55), q: r(0.15, 1.6),
+      span0: r(0.04, 0.35), span1: r(0, 0.25), fadeIn: r(0.02, 0.2),
+      v0: r(0.02, 0.14), v1: r(0.05, 0.7), vp: r(0.5, 2.6),
+      sizeSpread: r(0.1, 0.6), brGamma: r(0.4, 1.8),
+      swirl: Math.random() < 0.5 ? 0 : r(-0.5, 0.5)
+    });
+    if (P.uFloor > P.uRim - 0.05) P.uFloor = P.uRim - 0.05;
+    syncUI();
+  });
+
+  document.getElementById('bCopy').addEventListener('click', async (e) => {
+    const txt = JSON.stringify(P, null, 2);
+    try { await navigator.clipboard.writeText(txt); e.target.textContent = 'Copied'; }
+    catch { e.target.textContent = 'Copy blocked'; console.log(txt); }
+    setTimeout(() => { e.target.textContent = 'Copy settings'; }, 1400);
+  });
+
+  document.getElementById('bExport').addEventListener('click', (e) => {
+    let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+    // Bake the live settings into the exported file and switch it to clean mode.
+    html = html.replace(
+      'const EXPORT_ONLY = false;',
+      'const EXPORT_ONLY = true;'
+    );
+    html = html.replace(
+      'const EXPORT_SETTINGS = null;',
+      'const EXPORT_SETTINGS = ' + JSON.stringify(P, null, 2) + ';'
+    );
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'index.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    const old = e.target.textContent;
+    e.target.textContent = 'Exported';
+    setTimeout(() => { e.target.textContent = old; }, 1400);
+  });
+
+  const panel = document.getElementById('panel');
+  function togglePanel() {
+    const hidden = panel.hasAttribute('hidden-panel');
+    if (hidden) panel.removeAttribute('hidden-panel'); else panel.setAttribute('hidden-panel', '');
+  }
+  const toggleEl = document.getElementById('toggle');
+  if (!EXPORT_ONLY && toggleEl) {
+    toggleEl.addEventListener('click', togglePanel);
     addEventListener('keydown', e => {
       if (e.key === 'h' || e.key === 'H') {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
