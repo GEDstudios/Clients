@@ -6,13 +6,21 @@
 <style>
   :root { color-scheme: dark; --ink: #e9e9e9; --dim: #8a8a8a; --line: rgba(255,255,255,.10); }
   * { box-sizing: border-box; }
-  html, body { height: 100%; }
+  html, body {
+    width: 100%; height: 100%;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
   body {
     margin: 0; background: #040404; overflow: hidden;
     font-family: ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
     -webkit-tap-highlight-color: transparent;
+    user-select: none; -webkit-user-select: none;
   }
-  canvas#c { display: block; width: 100vw; height: 100vh; }
+  canvas#c {
+    display: block; width: 100vw; height: 100dvh;
+    touch-action: none;
+  }
 
   /* Standalone exports keep the runtime but show only the vortex itself. */
   html.export-only .panel,
@@ -20,11 +28,18 @@
 
   .dive {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
-    padding: 14px 30px; font-size: 16px; color: var(--ink);
-    background: rgba(30,30,30,.76); border: 1px solid rgba(255,255,255,.09);
-    border-radius: 14px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-    cursor: pointer; transition: background 180ms ease, border-color 180ms ease;
+    min-height: 44px; padding: 12px 26px; font-size: 15px; line-height: 1;
+    font-weight: 520; letter-spacing: .01em; color: var(--ink);
+    background: rgba(20,20,20,.72);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 999px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 30px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.035);
+    cursor: pointer; touch-action: manipulation;
+    transition: background 160ms ease, border-color 160ms ease, transform 110ms ease;
+    z-index: 4;
   }
+  .dive:active { transform: translate(-50%,-50%) scale(.96); }
   .dive:hover { background: rgba(46,46,46,.86); border-color: rgba(255,255,255,.19); }
   .dive:focus-visible, .panel button:focus-visible { outline: 2px solid rgba(255,255,255,.5); outline-offset: 2px; }
 
@@ -114,22 +129,29 @@
   .toggle:hover { background: rgba(40,40,40,.8); }
 
   @media (max-width: 720px) {
-    .panel { width: 100%; }
-    .toggle { top: 10px; right: 10px; }
+    .panel { width: 100%; touch-action: pan-y; }
+    .toggle { top: max(10px, env(safe-area-inset-top)); right: 10px; }
+    .dive {
+      min-height: 46px; padding: 13px 25px; font-size: 14px;
+      background: rgba(18,18,18,.68);
+      border-color: rgba(255,255,255,.18);
+      box-shadow: 0 7px 24px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.045);
+    }
+    input[type=range], select, input[type=color], input[type=text], button { touch-action: manipulation; }
   }
 </style>
 </head>
 <body>
-<canvas id="c" width="822" height="1612"></canvas>
+<canvas id="c" width="3456" height="1994"></canvas>
 <button class="dive" id="dive">Dive in</button>
 <button class="toggle" id="toggle" aria-label="Toggle controls" title="Toggle controls (H)">☰</button>
 
 <div class="panel" id="panel">
   <div class="phead">
     <h1>Vortex</h1>
-    <div class="stat" id="stat">60 fps · 699</div>
+    <div class="stat" id="stat">120 fps · 1852</div>
   </div>
-  <div class="pbody" id="pbody"><details open=""><summary>Ring</summary><div class="grp"><div class="row" title="Outer edge as a fraction of the short side"><div class="rlab"><span>Rim radius</span><b id="v_rFrac">0.455</b></div><input type="range" min="0.15" max="0.7" step="0.005" aria-label="Rim radius"></div><div class="row" title="Where glyphs first appear"><div class="rlab"><span>Spawn radius</span><b id="v_uSpawn">1.030</b></div><input type="range" min="0.7" max="1.3" step="0.005" aria-label="Spawn radius"></div><div class="row" title="How fast a glyph reaches full strength at the rim"><div class="rlab"><span>Resolve width</span><b id="v_fadeIn">0.110</b></div><input type="range" min="0.005" max="0.4" step="0.005" aria-label="Resolve width"></div><div class="row" title="Upper bound on where glyphs give out"><div class="rlab"><span>Dissolve start</span><b id="v_uRim">1.020</b></div><input type="range" min="0.3" max="1.2" step="0.005" aria-label="Dissolve start"></div><div class="row" title="Deepest any glyph survives — sets the hole"><div class="rlab"><span>Dissolve floor</span><b id="v_uFloor">0.320</b></div><input type="range" min="0.02" max="0.9" step="0.005" aria-label="Dissolve floor"></div><div class="row" title="Low values send more glyphs deep; high values kill them early"><div class="rlab"><span>Depth skew</span><b id="v_q">0.69</b></div><input type="range" min="0.05" max="3" step="0.01" aria-label="Depth skew"></div><div class="row" title="How much radius a glyph takes to fade out"><div class="rlab"><span>Dissolve length</span><b id="v_span0">0.600</b></div><input type="range" min="0.01" max="0.6" step="0.005" aria-label="Dissolve length"></div><div class="row" title="Variation in that fade length"><div class="rlab"><span>Dissolve spread</span><b id="v_span1">0.000</b></div><input type="range" min="0" max="0.6" step="0.005" aria-label="Dissolve spread"></div></div></details><details open=""><summary>Motion</summary><div class="grp"><div class="row" title="Drift rate out at the edge"><div class="rlab"><span>Rim speed</span><b id="v_v0">0.071</b></div><input type="range" min="0" max="0.4" step="0.001" aria-label="Rim speed"></div><div class="row" title="Extra speed gained falling inward"><div class="rlab"><span>Core pull</span><b id="v_v1">0.635</b></div><input type="range" min="0" max="1.5" step="0.005" aria-label="Core pull"></div><div class="row" title="Below 1 pulls early, above 1 pulls late and hard"><div class="rlab"><span>Pull curve</span><b id="v_vp">1.95</b></div><input type="range" min="0.2" max="4" step="0.01" aria-label="Pull curve"></div><div class="row" title="Per-glyph speed floor"><div class="rlab"><span>Speed base</span><b id="v_spd0">0.74</b></div><input type="range" min="0.1" max="2" step="0.01" aria-label="Speed base"></div><div class="row" title="Per-glyph speed variation"><div class="rlab"><span>Speed spread</span><b id="v_spd1">1.39</b></div><input type="range" min="0" max="2" step="0.01" aria-label="Speed spread"></div><div class="row" title="Rotation. Zero matches the reference"><div class="rlab"><span>Swirl</span><b id="v_swirl">0.06</b></div><input type="range" min="-1.5" max="1.5" step="0.01" aria-label="Swirl"></div><div class="row" title="How much faster the swirl runs near the middle"><div class="rlab"><span>Swirl core gain</span><b id="v_swirlGain">2.10</b></div><input type="range" min="0" max="6" step="0.05" aria-label="Swirl core gain"></div><div class="row" title="Global speed. Zero freezes the field"><div class="rlab"><span>Time scale</span><b id="v_timeScale">1.01</b></div><input type="range" min="0" max="3" step="0.01" aria-label="Time scale"></div></div></details><details open=""><summary>Glyphs</summary><div class="grp"><div class="row" title="Glyphs per square pixel of rim radius"><div class="rlab"><span>Density</span><b id="v_density">0.0200</b></div><input type="range" min="0.0005" max="0.03" step="0.0005" aria-label="Density"></div><div class="row" title="Glyph size as a fraction of the short side"><div class="rlab"><span>Size</span><b id="v_size">0.0128</b></div><input type="range" min="0.002" max="0.04" step="0.0002" aria-label="Size"></div><div class="row" title="Log-normal spread of glyph sizes"><div class="rlab"><span>Size spread</span><b id="v_sizeSpread">0.27</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Size spread"></div><div class="row" title="Dimmest a glyph can be"><div class="rlab"><span>Brightness floor</span><b id="v_br0">0.94</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Brightness floor"></div><div class="row" title="Spread above that floor"><div class="rlab"><span>Brightness range</span><b id="v_br1">0.45</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Brightness range"></div><div class="row" title="Below 1 favours bright, above 1 favours dim"><div class="rlab"><span>Brightness skew</span><b id="v_brGamma">0.70</b></div><input type="range" min="0.1" max="3" step="0.01" aria-label="Brightness skew"></div><div class="row" title="Chance per frame a glyph changes character"><div class="rlab"><span>Character churn</span><b id="v_churn">0.0018</b></div><input type="range" min="0" max="0.02" step="0.0005" aria-label="Character churn"></div></div></details><details open=""><summary>Cursor</summary><div class="grp"><div class="row" title="Reach of the cursor, relative to the rim"><div class="rlab"><span>Field radius</span><b id="v_repelR">1.00</b></div><input type="range" min="0" max="1.2" step="0.01" aria-label="Field radius"></div><div class="row" title="Positive pushes away, negative pulls in"><div class="rlab"><span>Force</span><b id="v_repelForce">2000</b></div><input type="range" min="-2000" max="2000" step="10" aria-label="Force"></div><div class="row" title="Higher values concentrate the effect at the centre"><div class="rlab"><span>Falloff</span><b id="v_repelFalloff">3.00</b></div><input type="range" min="0.5" max="5" step="0.05" aria-label="Falloff"></div><div class="row" title="How quickly glyphs settle back"><div class="rlab"><span>Return speed</span><b id="v_repelReturn">0.19</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Return speed"></div><div class="row" title="Stirs glyphs around the cursor instead of away"><div class="rlab"><span>Tangential</span><b id="v_cursorSwirl">0</b></div><input type="range" min="-1500" max="1500" step="10" aria-label="Tangential"></div></div></details><details open=""><summary>Render</summary><div class="grp"><div class="row" title="Overall brightness multiplier"><div class="rlab"><span>Exposure</span><b id="v_exposure">1.00</b></div><input type="range" min="0.1" max="3" step="0.01" aria-label="Exposure"></div><div class="row" title="Persistence of previous frames"><div class="rlab"><span>Trails</span><b id="v_trail">0.00</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Trails"></div>
+  <div class="pbody" id="pbody"><details open=""><summary>Ring</summary><div class="grp"><div class="row" title="Outer edge as a fraction of the short side"><div class="rlab"><span>Rim radius</span><b id="v_rFrac">0.455</b></div><input type="range" min="0.15" max="0.7" step="0.005" aria-label="Rim radius"></div><div class="row" title="Where glyphs first appear"><div class="rlab"><span>Spawn radius</span><b id="v_uSpawn">1.065</b></div><input type="range" min="0.7" max="1.3" step="0.005" aria-label="Spawn radius"></div><div class="row" title="How fast a glyph reaches full strength at the rim"><div class="rlab"><span>Resolve width</span><b id="v_fadeIn">0.125</b></div><input type="range" min="0.005" max="0.4" step="0.005" aria-label="Resolve width"></div><div class="row" title="Upper bound on where glyphs give out"><div class="rlab"><span>Dissolve start</span><b id="v_uRim">1.080</b></div><input type="range" min="0.3" max="1.2" step="0.005" aria-label="Dissolve start"></div><div class="row" title="Deepest any glyph survives — sets the hole"><div class="rlab"><span>Dissolve floor</span><b id="v_uFloor">0.280</b></div><input type="range" min="0.02" max="0.9" step="0.005" aria-label="Dissolve floor"></div><div class="row" title="Low values send more glyphs deep; high values kill them early"><div class="rlab"><span>Depth skew</span><b id="v_q">0.69</b></div><input type="range" min="0.05" max="3" step="0.01" aria-label="Depth skew"></div><div class="row" title="How much radius a glyph takes to fade out"><div class="rlab"><span>Dissolve length</span><b id="v_span0">0.600</b></div><input type="range" min="0.01" max="0.6" step="0.005" aria-label="Dissolve length"></div><div class="row" title="Variation in that fade length"><div class="rlab"><span>Dissolve spread</span><b id="v_span1">0.260</b></div><input type="range" min="0" max="0.6" step="0.005" aria-label="Dissolve spread"></div></div></details><details open=""><summary>Motion</summary><div class="grp"><div class="row" title="Drift rate out at the edge"><div class="rlab"><span>Rim speed</span><b id="v_v0">0.037</b></div><input type="range" min="0" max="0.4" step="0.001" aria-label="Rim speed"></div><div class="row" title="Extra speed gained falling inward"><div class="rlab"><span>Core pull</span><b id="v_v1">1.440</b></div><input type="range" min="0" max="1.5" step="0.005" aria-label="Core pull"></div><div class="row" title="Below 1 pulls early, above 1 pulls late and hard"><div class="rlab"><span>Pull curve</span><b id="v_vp">1.82</b></div><input type="range" min="0.2" max="4" step="0.01" aria-label="Pull curve"></div><div class="row" title="Per-glyph speed floor"><div class="rlab"><span>Speed base</span><b id="v_spd0">0.74</b></div><input type="range" min="0.1" max="2" step="0.01" aria-label="Speed base"></div><div class="row" title="Per-glyph speed variation"><div class="rlab"><span>Speed spread</span><b id="v_spd1">1.39</b></div><input type="range" min="0" max="2" step="0.01" aria-label="Speed spread"></div><div class="row" title="Rotation. Zero matches the reference"><div class="rlab"><span>Swirl</span><b id="v_swirl">0.06</b></div><input type="range" min="-1.5" max="1.5" step="0.01" aria-label="Swirl"></div><div class="row" title="How much faster the swirl runs near the middle"><div class="rlab"><span>Swirl core gain</span><b id="v_swirlGain">2.10</b></div><input type="range" min="0" max="6" step="0.05" aria-label="Swirl core gain"></div><div class="row" title="Global speed. Zero freezes the field"><div class="rlab"><span>Time scale</span><b id="v_timeScale">1.01</b></div><input type="range" min="0" max="3" step="0.01" aria-label="Time scale"></div></div></details><details open=""><summary>Glyphs</summary><div class="grp"><div class="row" title="Glyphs per square pixel of rim radius"><div class="rlab"><span>Density</span><b id="v_density">0.0090</b></div><input type="range" min="0.0005" max="0.03" step="0.0005" aria-label="Density"></div><div class="row" title="Glyph size as a fraction of the short side"><div class="rlab"><span>Size</span><b id="v_size">0.0152</b></div><input type="range" min="0.002" max="0.04" step="0.0002" aria-label="Size"></div><div class="row" title="Log-normal spread of glyph sizes"><div class="rlab"><span>Size spread</span><b id="v_sizeSpread">0.12</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Size spread"></div><div class="row" title="Dimmest a glyph can be"><div class="rlab"><span>Brightness floor</span><b id="v_br0">0.94</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Brightness floor"></div><div class="row" title="Spread above that floor"><div class="rlab"><span>Brightness range</span><b id="v_br1">0.45</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Brightness range"></div><div class="row" title="Below 1 favours bright, above 1 favours dim"><div class="rlab"><span>Brightness skew</span><b id="v_brGamma">0.70</b></div><input type="range" min="0.1" max="3" step="0.01" aria-label="Brightness skew"></div><div class="row" title="Chance per frame a glyph changes character"><div class="rlab"><span>Character churn</span><b id="v_churn">0.0000</b></div><input type="range" min="0" max="0.02" step="0.0005" aria-label="Character churn"></div></div></details><details open=""><summary>Cursor</summary><div class="grp"><div class="row" title="Reach of the cursor, relative to the rim"><div class="rlab"><span>Field radius</span><b id="v_repelR">1.00</b></div><input type="range" min="0" max="1.2" step="0.01" aria-label="Field radius"></div><div class="row" title="Positive pushes away, negative pulls in"><div class="rlab"><span>Force</span><b id="v_repelForce">2000</b></div><input type="range" min="-2000" max="2000" step="10" aria-label="Force"></div><div class="row" title="Higher values concentrate the effect at the centre"><div class="rlab"><span>Falloff</span><b id="v_repelFalloff">3.00</b></div><input type="range" min="0.5" max="5" step="0.05" aria-label="Falloff"></div><div class="row" title="How quickly glyphs settle back"><div class="rlab"><span>Return speed</span><b id="v_repelReturn">0.19</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Return speed"></div><div class="row" title="Stirs glyphs around the cursor instead of away"><div class="rlab"><span>Tangential</span><b id="v_cursorSwirl">0</b></div><input type="range" min="-1500" max="1500" step="10" aria-label="Tangential"></div></div></details><details><summary>Render</summary><div class="grp"><div class="row" title="Overall brightness multiplier"><div class="rlab"><span>Exposure</span><b id="v_exposure">1.00</b></div><input type="range" min="0.1" max="3" step="0.01" aria-label="Exposure"></div><div class="row" title="Persistence of previous frames"><div class="rlab"><span>Trails</span><b id="v_trail">0.00</b></div><input type="range" min="0" max="1" step="0.01" aria-label="Trails"></div>
         <label class="chk"><input type="checkbox" id="cAdd"> Additive blending</label>
         <label class="chk"><input type="checkbox" id="cThr" checked=""> Auto-throttle for frame rate</label>
         <div class="sel"><span>Character set</span>
@@ -164,28 +186,28 @@
   const EXPORT_ONLY = true;
   const EXPORT_SETTINGS = {
   "rFrac": 0.455,
-  "uSpawn": 1.03,
-  "fadeIn": 0.11,
-  "uRim": 1.02,
-  "uFloor": 0.32,
+  "uSpawn": 1.065,
+  "fadeIn": 0.125,
+  "uRim": 1.08,
+  "uFloor": 0.28,
   "q": 0.69,
   "span0": 0.6,
-  "span1": 0,
-  "v0": 0.071,
-  "v1": 0.635,
-  "vp": 1.95,
+  "span1": 0.26,
+  "v0": 0.037,
+  "v1": 1.44,
+  "vp": 1.82,
   "spd0": 0.74,
   "spd1": 1.39,
   "swirl": 0.06,
   "swirlGain": 2.1,
   "timeScale": 1.01,
-  "density": 0.02,
-  "size": 0.0128,
-  "sizeSpread": 0.27,
+  "density": 0.009,
+  "size": 0.0152,
+  "sizeSpread": 0.12,
   "br0": 0.94,
   "br1": 0.45,
   "brGamma": 0.7,
-  "churn": 0.0018,
+  "churn": 0,
   "repelR": 1,
   "repelForce": 2000,
   "repelFalloff": 3,
@@ -194,7 +216,7 @@
   "exposure": 1,
   "trail": 0,
   "additive": false,
-  "autoThrottle": false,
+  "autoThrottle": true,
   "glyphColor": "#ffffff",
   "bgColor": "#040404",
   "charset": "custom",
@@ -243,6 +265,7 @@
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const coarsePointer = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
 
   /* ---------------- glyph atlas ---------------- */
   const CELL = 64;
@@ -332,7 +355,8 @@
   /* ---------------- viewport ---------------- */
   let W = 0, H = 0, cx = 0, cy = 0, R = 1, base = 1, target = 1000, active = 1000;
   function recount() {
-    target = Math.max(50, Math.min(MAX, Math.round(P.density * R * R)));
+    const mobileDensityBoost = coarsePointer ? 1.22 : 1;
+    target = Math.max(50, Math.min(MAX, Math.round(P.density * R * R * mobileDensityBoost)));
     if (!P.autoThrottle || active > target) active = target;
   }
   function resize() {
@@ -342,21 +366,60 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     cx = W / 2; cy = H / 2;
     const m = Math.min(W, H);
-    R = m * P.rFrac; base = m * P.size;
+    R = m * P.rFrac;
+    base = m * P.size * (coarsePointer ? 1.10 : 1);
     recount();
   }
   resize(); active = target;
   addEventListener('resize', resize, { passive: true });
 
-  /* ---------------- pointer ---------------- */
+  /* ---------------- pointer / touch ---------------- */
   let mx = -9e9, my = -9e9, hasPointer = false;
-  function onMove(e) {
-    if (!EXPORT_ONLY && e.target && e.target.closest && e.target.closest('.panel, .toggle')) { hasPointer = false; return; }
-    mx = e.clientX; my = e.clientY; hasPointer = true;
+  let pointerDown = false, pointerLife = 0, activePointerId = null;
+
+  function overEditorUI(e) {
+    return !EXPORT_ONLY && e.target && e.target.closest &&
+      e.target.closest('.panel, .toggle');
   }
-  addEventListener('pointermove', onMove, { passive: true });
-  addEventListener('pointerdown', onMove, { passive: true });
-  addEventListener('pointerleave', () => { hasPointer = false; }, { passive: true });
+
+  function setPointer(e) {
+    if (overEditorUI(e)) { hasPointer = false; return; }
+    mx = e.clientX; my = e.clientY;
+    hasPointer = true;
+    pointerLife = coarsePointer ? 0.18 : 999;
+  }
+
+  addEventListener('pointerdown', e => {
+    if (overEditorUI(e)) return;
+    pointerDown = true;
+    activePointerId = e.pointerId;
+    setPointer(e);
+    if (canvas.setPointerCapture && e.target === canvas) {
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+    }
+  }, { passive: true });
+
+  addEventListener('pointermove', e => {
+    if (!coarsePointer || pointerDown || e.pointerType === 'mouse') setPointer(e);
+  }, { passive: true });
+
+  function releasePointer(e) {
+    if (activePointerId !== null && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
+    pointerDown = false;
+    activePointerId = null;
+    if (coarsePointer) {
+      pointerLife = 0.16;
+      hasPointer = true;
+    } else {
+      hasPointer = false;
+    }
+  }
+
+  addEventListener('pointerup', releasePointer, { passive: true });
+  addEventListener('pointercancel', releasePointer, { passive: true });
+  addEventListener('pointerleave', () => {
+    if (!pointerDown && !coarsePointer) hasPointer = false;
+  }, { passive: true });
 
   let boost = 0;
   const diveEl = document.getElementById('dive');
@@ -377,11 +440,19 @@
 
     boost *= Math.pow(0.14, dt);
     const surge = (1 + boost * 2.6) * P.timeScale * (reduceMotion ? 0.35 : 1);
-    const rep = R * P.repelR, repSq = rep * rep;
-    const damp = Math.pow(1 - Math.min(0.999, P.repelReturn), dt * 12);
+    if (coarsePointer && !pointerDown && pointerLife > 0) {
+      pointerLife -= dt;
+      if (pointerLife <= 0) hasPointer = false;
+    }
+
+    const touchRadius = coarsePointer ? 1.12 : 1;
+    const touchForce = coarsePointer ? 1.28 : 1;
+    const rep = R * P.repelR * touchRadius, repSq = rep * rep;
+    const returnRate = Math.min(0.999, P.repelReturn * (coarsePointer ? 1.35 : 1));
+    const damp = Math.pow(1 - returnRate, dt * 12);
     const uSpawn = P.uSpawn, fadeIn = P.fadeIn, churn = P.churn;
     const expo = P.exposure, swirl = P.swirl, swirlGain = P.swirlGain;
-    const force = P.repelForce, falloff = P.repelFalloff, cSwirl = P.cursorSwirl;
+    const force = P.repelForce * touchForce, falloff = P.repelFalloff, cSwirl = P.cursorSwirl;
     const nChars = CHARS.length;
 
     if (P.trail > 0) {
@@ -675,6 +746,5 @@
   }
 })();
 </script>
-
 
 </body></html>
