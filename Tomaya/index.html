@@ -1,1 +1,432 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Glyph vortex</title>
+<style>
+  :root { color-scheme: dark; --ink: #e9e9e9; --dim: #8a8a8a; --line: rgba(255,255,255,.10); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: #040404; overflow: hidden;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas#c { display: block; width: 100vw; height: 100vh; }
 
+  .dive {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    padding: 14px 30px; font-size: 16px; color: var(--ink);
+    background: rgba(30,30,30,.76); border: 1px solid rgba(255,255,255,.09);
+    border-radius: 14px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    cursor: pointer; transition: background 180ms ease, border-color 180ms ease;
+  }
+  .dive:hover { background: rgba(46,46,46,.86); border-color: rgba(255,255,255,.19); }
+  .dive:focus-visible, .panel button:focus-visible { outline: 2px solid rgba(255,255,255,.5); outline-offset: 2px; }
+
+  /* ---- control panel ---- */
+  .panel {
+    position: fixed; top: 0; right: 0; width: 316px; height: 100%;
+    display: flex; flex-direction: column;
+    background: rgba(10,10,10,.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-left: 1px solid var(--line); color: var(--ink);
+    font-size: 12px; z-index: 10;
+    transition: transform 260ms cubic-bezier(.4,0,.2,1);
+  }
+  .panel[hidden-panel] { transform: translateX(100%); }
+
+  .phead {
+    padding: 14px 16px 12px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .phead h1 { margin: 0; font-size: 13px; font-weight: 550; letter-spacing: .01em; }
+  .stat { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums;
+          font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+
+  .pbody { overflow-y: auto; overflow-x: hidden; flex: 1; padding-bottom: 8px; }
+  .pbody::-webkit-scrollbar { width: 8px; }
+  .pbody::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
+
+  details { border-bottom: 1px solid var(--line); }
+  summary {
+    padding: 10px 16px; cursor: pointer; color: var(--dim);
+    font-size: 11px; font-weight: 550; letter-spacing: .06em; text-transform: uppercase;
+    list-style: none; user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: '+'; display: inline-block; width: 12px; color: rgba(255,255,255,.35); }
+  details[open] summary::before { content: '–'; }
+  summary:hover { color: var(--ink); }
+  .grp { padding: 2px 16px 12px; }
+
+  .row { margin-bottom: 11px; }
+  .rlab { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .rlab span:first-child { color: #cfcfcf; }
+  .rlab b {
+    margin-left: auto; font-weight: 400; color: var(--dim);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums; font-size: 11px;
+  }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 16px;
+    background: transparent; cursor: ew-resize; margin: 0; display: block;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: rgba(255,255,255,.16); border-radius: 2px; }
+  input[type=range]::-moz-range-track { height: 2px; background: rgba(255,255,255,.16); border-radius: 2px; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: #f0f0f0; margin-top: -5px; border: none;
+  }
+  input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #f0f0f0; border: none; }
+  input[type=range]:hover::-webkit-slider-thumb { background: #fff; }
+
+  .chk { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: #cfcfcf; cursor: pointer; }
+  .chk input { accent-color: #dcdcdc; width: 13px; height: 13px; }
+  .sel { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
+  .sel span { color: #cfcfcf; }
+  select, input[type=color], input[type=text] {
+    margin-left: auto; background: rgba(255,255,255,.06); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font-size: 11px;
+    font-family: inherit;
+  }
+  input[type=color] { padding: 2px; width: 44px; height: 24px; cursor: pointer; }
+  input[type=text] { width: 132px; font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em; }
+  input[type=text]:focus { outline: none; border-color: rgba(255,255,255,.35); }
+
+  .pfoot { padding: 10px 16px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; }
+  .panel button {
+    flex: 1 1 auto; padding: 7px 10px; font-size: 11px; font-family: inherit;
+    color: var(--ink); background: rgba(255,255,255,.06);
+    border: 1px solid var(--line); border-radius: 7px; cursor: pointer;
+  }
+  .panel button:hover { background: rgba(255,255,255,.13); }
+
+  .toggle {
+    position: fixed; top: 14px; right: 14px; z-index: 11;
+    width: 34px; height: 34px; display: grid; place-items: center;
+    background: rgba(20,20,20,.7); border: 1px solid var(--line); border-radius: 9px;
+    color: var(--ink); cursor: pointer; font-size: 14px; backdrop-filter: blur(8px);
+  }
+  .toggle:hover { background: rgba(40,40,40,.8); }
+
+  @media (max-width: 720px) {
+    .panel { width: 100%; }
+    .toggle { top: 10px; right: 10px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="822" height="1612"></canvas>
+
+
+
+
+<script>window.__VORTEX_EXPORT__ = true; window.__VORTEX_SETTINGS__ = {"rFrac":0.455,"uSpawn":1.03,"fadeIn":0.11,"uRim":1.02,"uFloor":0.32,"q":0.69,"span0":0.6,"span1":0,"v0":0.071,"v1":1.38,"vp":1.95,"spd0":0.74,"spd1":1.64,"swirl":0.06,"swirlGain":2.1,"timeScale":1.01,"density":1750,"size":0.0128,"sizeSpread":0.27,"br0":0.94,"br1":0.45,"brGamma":0.7,"churn":0.0175,"repelR":1.03,"repelForce":2000,"repelFalloff":3,"repelReturn":0.19,"cursorSwirl":0,"exposure":1,"trail":0,"additive":false,"autoThrottle":true,"glyphColor":"#ffffff","bgColor":"#040404","charset":"custom","customChars":"TOMAYA"};</script><script>
+(() => {
+  'use strict';
+
+  /* =================================================================
+     Default look. "Reset" restores exactly these values.
+  ================================================================= */
+  const FIT = {
+    rFrac: 0.455, uSpawn: 1.03, fadeIn: 0.11,
+    uRim: 1.02, uFloor: 0.32, q: 0.69,
+    span0: 0.60, span1: 0,
+    v0: 0.071, v1: 0.635, vp: 1.95,
+    spd0: 0.74, spd1: 1.39,
+    swirl: 0.06, swirlGain: 2.1, timeScale: 1.01,
+    density: 200, size: 0.0128, sizeSpread: 0.27,
+    br0: 0.94, br1: 0.45, brGamma: 0.70, churn: 0.0018,
+    repelR: 1, repelForce: 2000, repelFalloff: 3, repelReturn: 0.19, cursorSwirl: 0,
+    exposure: 1, trail: 0, additive: false, autoThrottle: true,
+    glyphColor: '#ffffff', bgColor: '#040404',
+    charset: 'custom', customChars: 'TOMAYA'
+  };;;
+  const EXPORT_MODE = !!window.__VORTEX_EXPORT__;
+  const P = Object.assign({}, FIT, window.__VORTEX_SETTINGS__ || {});
+
+  const CHARSETS = {
+    alnum:  'ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ01234567890123456789+-=<>()[].,/',
+    letters:'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    digits: '0123456789',
+    hex:    '0123456789ABCDEF',
+    binary: '01',
+    code:   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789{}[]()<>/\\|=+-*&^%$#@!?;:.,_',
+    kana:   'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン'
+  };
+
+  /* Active character list. Repeats are meaningful: 'AAB' makes A
+     twice as likely to appear as B. */
+  function charList() {
+    if (P.charset !== 'custom') return CHARSETS[P.charset] || CHARSETS.alnum;
+    const c = (P.customChars || '').slice(0, 200);
+    return c.length ? c : 'TOMAYA';
+  }
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------------- glyph atlas ---------------- */
+  const CELL = 64;
+  let CHARS = charList();
+  const atlas = document.createElement('canvas');
+  const actx = atlas.getContext('2d');
+
+  function buildAtlas() {
+    CHARS = charList();
+    atlas.width = CELL * CHARS.length;
+    atlas.height = CELL;
+    actx.clearRect(0, 0, atlas.width, atlas.height);
+    actx.font = `500 ${CELL * 0.7}px ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace`;
+    actx.textAlign = 'center';
+    actx.textBaseline = 'middle';
+    actx.fillStyle = P.glyphColor;
+    for (let i = 0; i < CHARS.length; i++) actx.fillText(CHARS[i], i * CELL + CELL / 2, CELL / 2 + CELL * 0.02);
+    for (let i = 0; i < MAX; i++) if (gid[i] >= CHARS.length) gid[i] = (Math.random() * CHARS.length) | 0;
+  }
+
+  /* ---------------- particles ----------------
+     Each particle keeps its raw random draws. Derived values are
+     recomputed from those seeds whenever a distribution control
+     moves, so edits apply to every glyph at once instead of
+     trickling in as particles respawn.
+  -------------------------------------------- */
+  const MAX = 6000;
+  const ang  = new Float32Array(MAX);
+  const u    = new Float32Array(MAX);
+  const offX = new Float32Array(MAX);
+  const offY = new Float32Array(MAX);
+  const gid  = new Uint8Array(MAX);
+
+  const sDie  = new Float32Array(MAX);   // uniform seeds
+  const sSpan = new Float32Array(MAX);
+  const sSpd  = new Float32Array(MAX);
+  const sBr   = new Float32Array(MAX);
+  const sSz   = new Float32Array(MAX);   // unit normal
+
+  const uDie = new Float32Array(MAX);    // derived
+  const span = new Float32Array(MAX);
+  const spd  = new Float32Array(MAX);
+  const brv  = new Float32Array(MAX);
+  const szv  = new Float32Array(MAX);
+
+  function gauss() {
+    let a = 0;
+    while (a === 0) a = Math.random();
+    return Math.sqrt(-2 * Math.log(a)) * Math.cos(6.283185307 * Math.random());
+  }
+  function reseed(i) {
+    sDie[i] = Math.random(); sSpan[i] = Math.random(); sSpd[i] = Math.random();
+    sBr[i] = Math.random();  sSz[i] = gauss();
+  }
+  function derive(i) {
+    let d = Math.max(P.uFloor, P.uRim * Math.pow(sDie[i], P.q));
+    if (d > P.uSpawn - 0.01) d = P.uSpawn - 0.01;   // always leave room to travel
+    uDie[i] = d;
+    span[i] = P.span0 + sSpan[i] * P.span1;
+    spd[i]  = P.spd0 + sSpd[i] * P.spd1;
+    brv[i]  = P.br0 + P.br1 * Math.pow(sBr[i], P.brGamma);
+    szv[i]  = Math.exp(sSz[i] * P.sizeSpread);
+  }
+  function deriveAll() { for (let i = 0; i < MAX; i++) derive(i); }
+
+  function respawn(i, seed) {
+    ang[i] = Math.random() * 6.283185307;
+    reseed(i); derive(i);
+    u[i] = seed ? uDie[i] + Math.random() * Math.max(0.001, P.uSpawn - uDie[i]) : P.uSpawn;
+    gid[i] = (Math.random() * CHARS.length) | 0;
+    offX[i] = 0; offY[i] = 0;
+  }
+  for (let i = 0; i < MAX; i++) respawn(i, true);
+  buildAtlas();
+
+  /* ---------------- speed lookup ----------------
+     v(u) = v0 + v1 * (1-u)^vp, tabulated so the hot loop never
+     calls Math.pow even while the curve is being dragged.
+  ---------------------------------------------- */
+  const LUTN = 512;
+  const lut = new Float32Array(LUTN + 1);
+  function buildLut() {
+    for (let j = 0; j <= LUTN; j++) lut[j] = P.v0 + P.v1 * Math.pow(j / LUTN, P.vp);
+  }
+  buildLut();
+
+  /* ---------------- viewport ---------------- */
+  let W = 0, H = 0, cx = 0, cy = 0, R = 1, base = 1, target = 1000, active = 1000;
+  function recount() {
+    target = Math.max(50, Math.min(MAX, Math.round(P.density)));
+    if (!P.autoThrottle || active > target) active = target;
+  }
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2; cy = H / 2;
+    const m = Math.min(W, H);
+    R = m * P.rFrac; base = m * P.size;
+    recount();
+  }
+  resize(); active = target;
+  addEventListener('resize', resize, { passive: true });
+
+  /* ---------------- pointer ---------------- */
+  let mx = -9e9, my = -9e9, hasPointer = false;
+  function onMove(e) {
+    if (e.target && e.target.closest && e.target.closest('.panel, .toggle')) { hasPointer = false; return; }
+    mx = e.clientX; my = e.clientY; hasPointer = true;
+  }
+  addEventListener('pointermove', onMove, { passive: true });
+  addEventListener('pointerdown', onMove, { passive: true });
+  addEventListener('pointerleave', () => { hasPointer = false; }, { passive: true });
+
+  let boost = 0;
+  const diveEl = document.getElementById('dive');
+  if (diveEl) diveEl.addEventListener('click', () => { boost = 1; });
+
+  /* ---------------- loop ---------------- */
+  let last = performance.now(), frameAvg = 16.7, running = true, fps = 60, statT = 0;
+  const statEl = document.getElementById('stat');
+  document.addEventListener('visibilitychange', () => {
+    running = !document.hidden;
+    if (running) { last = performance.now(); requestAnimationFrame(frame); }
+  });
+
+  function frame(now) {
+    if (!running) return;
+    let dt = (now - last) / 1000; last = now;
+    if (dt > 0.05) dt = 0.05;
+
+    boost *= Math.pow(0.14, dt);
+    const surge = (1 + boost * 2.6) * P.timeScale * (reduceMotion ? 0.35 : 1);
+    const rep = R * P.repelR, repSq = rep * rep;
+    const damp = Math.pow(1 - Math.min(0.999, P.repelReturn), dt * 12);
+    const uSpawn = P.uSpawn, fadeIn = P.fadeIn, churn = P.churn;
+    const expo = P.exposure, swirl = P.swirl, swirlGain = P.swirlGain;
+    const force = P.repelForce, falloff = P.repelFalloff, cSwirl = P.cursorSwirl;
+    const nChars = CHARS.length;
+
+    if (P.trail > 0) {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = hexA(P.bgColor, 1 - P.trail * 0.97);
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = P.bgColor;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (P.additive) ctx.globalCompositeOperation = 'lighter';
+
+    for (let i = 0; i < active; i++) {
+      let t = u[i];
+
+      let k = 1 - t; if (k < 0) k = 0; else if (k > 1) k = 1;
+      t -= lut[(k * LUTN) | 0] * spd[i] * surge * dt;
+
+      if (t < uDie[i]) { respawn(i, false); t = u[i]; }
+      else u[i] = t;
+
+      if (swirl !== 0) ang[i] += swirl * (1 + swirlGain * k * k) * surge * dt;
+      if (churn > 0 && Math.random() < churn) gid[i] = (Math.random() * nChars) | 0;
+
+      let fin = (uSpawn - t) / fadeIn;
+      fin = fin > 1 ? 1 : fin < 0 ? 0 : fin;
+      let fo = (t - uDie[i]) / span[i];
+      fo = fo > 1 ? 1 : fo < 0 ? 0 : fo;
+      fo = fo * fo * (3 - 2 * fo);
+      let alpha = fin * fo * brv[i] * expo;
+      if (alpha < 0.012) continue;
+      if (alpha > 1) alpha = 1;
+
+      const r = t * R;
+      let x = cx + Math.cos(ang[i]) * r;
+      let y = cy + Math.sin(ang[i]) * r;
+
+      let ox = offX[i], oy = offY[i];
+      if (hasPointer && rep > 0) {
+        const dx = x + ox - mx, dy = y + oy - my;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < repSq && d2 > 0.0001) {
+          const d = Math.sqrt(d2);
+          const f = Math.pow(1 - d / rep, falloff);
+          const nx = dx / d, ny = dy / d;
+          const push = f * force * dt;
+          ox += nx * push; oy += ny * push;
+          if (cSwirl !== 0) { const s = f * cSwirl * dt; ox += -ny * s; oy += nx * s; }
+        }
+      }
+      ox *= damp; oy *= damp;
+      offX[i] = ox; offY[i] = oy;
+      x += ox; y += oy;
+
+      const s = base * szv[i];
+      if (x < -s || x > W + s || y < -s || y > H + s) continue;
+
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(atlas, gid[i] * CELL, 0, CELL, CELL, x - s * 0.5, y - s * 0.5, s, s);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+    frameAvg += (dt * 1000 - frameAvg) * 0.04;
+    if (P.autoThrottle) {
+      if (frameAvg > 22 && active > 50) active -= 10;
+      else if (frameAvg < 15 && active < target) active += 5;
+    } else active = target;
+
+    if (now - statT > 400) {
+      statT = now; fps = Math.round(1000 / Math.max(frameAvg, 0.01));
+      if (statEl) statEl.textContent = fps + ' fps · ' + active;
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  /* =================================================================
+     Control panel. Built from a spec so every control declares what
+     it invalidates: derived per-particle values, the speed table,
+     the particle budget, the viewport, or the glyph atlas.
+  ================================================================= */
+  if (!EXPORT_MODE) {
+    const SPEC = [
+      ['Ring', [
+        ['rFrac',   'Rim radius',      0.15, 0.70, 0.005, 'view',   'Outer edge as a fraction of the short side'],
+        ['uSpawn',  'Spawn radius',    0.70, 1.30, 0.005, 'derive', 'Where glyphs first appear'],
+        ['fadeIn',  'Resolve width',   0.005, 0.40, 0.005, null,    'How fast a glyph reaches full strength at the rim'],
+        ['uRim',    'Dissolve start',  0.30, 1.20, 0.005, 'derive', 'Upper bound on where glyphs give out'],
+        ['uFloor',  'Dissolve floor',  0.02, 0.90, 0.005, 'derive', 'Deepest any glyph survives — sets the hole'],
+        ['q',       'Depth skew',      0.05, 3.00, 0.010, 'derive', 'Low values send more glyphs deep; high values kill them early'],
+        ['span0',   'Dissolve length', 0.01, 0.60, 0.005, 'derive', 'How much radius a glyph takes to fade out'],
+        ['span1',   'Dissolve spread', 0.00, 0.60, 0.005, 'derive', 'Variation in that fade length']
+      ]],
+      ['Motion', [
+        ['v0',        'Rim speed',      0.00, 0.40, 0.001, 'lut',  'Drift rate out at the edge'],
+        ['v1',        'Core pull',      0.00, 1.50, 0.005, 'lut',  'Extra speed gained falling inward'],
+        ['vp',        'Pull curve',     0.20, 4.00, 0.010, 'lut',  'Below 1 pulls early, above 1 pulls late and hard'],
+        ['spd0',      'Speed base',     0.10, 2.00, 0.010, 'derive', 'Per-glyph speed floor'],
+        ['spd1',      'Speed spread',   0.00, 2.00, 0.010, 'derive', 'Per-glyph speed variation'],
+        ['swirl',     'Swirl',         -1.50, 1.50, 0.010, null,   'Rotation. Zero matches the reference'],
+        ['swirlGain', 'Swirl core gain', 0.0, 6.00, 0.050, null,   'How much faster the swirl runs near the middle'],
+        ['timeScale', 'Time scale',     0.00, 3.00, 0.010, null,   'Global speed. Zero freezes the field']
+      ]],
+      ['Glyphs', [
+        ['density',    'Density',       50, 6000, 10, 'count',  'Number of active glyphs'],
+        ['size',       'Size',          0.002, 0.040, 0.0002, 'view',   'Glyph size as a fraction of the short side'],
+        ['sizeSpread', 'Size spread',   0.00, 1.00, 0.010, 'derive',   'Log-normal spread of glyph sizes'],
+        ['br0',        'Brightness floor', 0.00, 1.00, 0.010, 'derive', 'Dimmest a glyph can be'],
+        ['br1',        'Brightness range', 0.00, 1.00, 0.010, 'derive', 'Spread above that floor'],
+        ['brGamma',    'Brightness skew',  0.10, 3.00, 0.010, 'derive', 'Below 1 favours bright, above 1 favours dim'],
+        ['churn',      'Character churn',  0.00, 0.020, 0.0005, null,   'Chance per frame a glyph changes character']
+      ]],
+      ['Cursor', [
+        ['repelR',      'Field radius',  0.00, 1.20, 0.010, null, 'Reach of the cursor, relative to the rim'],
+        ['repelForce',  'Force',        -2000, 2000, 10,    null, 'Positive pushes away, negative pulls in'],
+        ['repelFalloff','Falloff',       0.50, 5.00, 0.050, null, 'Higher values concentrate the effect at the centre'],
+        ['repelReturn', 'Return speed',  0.00, 1.00, 0.010, null, 'How quickly glyphs settle back'],
+        ['cursorS
