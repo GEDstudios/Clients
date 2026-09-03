@@ -429,4 +429,166 @@
         ['repelForce',  'Force',        -2000, 2000, 10,    null, 'Positive pushes away, negative pulls in'],
         ['repelFalloff','Falloff',       0.50, 5.00, 0.050, null, 'Higher values concentrate the effect at the centre'],
         ['repelReturn', 'Return speed',  0.00, 1.00, 0.010, null, 'How quickly glyphs settle back'],
-        ['cursorS
+        ['cursorSwirl', 'Tangential',   -1500, 1500, 10,    null, 'Stirs glyphs around the cursor instead of away']
+      ]],
+      ['Render', [
+        ['exposure', 'Exposure', 0.10, 3.00, 0.010, null, 'Overall brightness multiplier'],
+        ['trail',    'Trails',   0.00, 1.00, 0.010, null, 'Persistence of previous frames']
+      ]]
+    ];
+
+    const body = document.getElementById('pbody');
+    const inputs = {};
+
+    function fmt(v, step) {
+      if (step >= 1) return String(Math.round(v));
+      const dp = Math.min(4, String(step).split('.')[1].length);
+      return v.toFixed(dp);
+    }
+
+    function apply(action) {
+      if (action === 'derive') deriveAll();
+      else if (action === 'lut') buildLut();
+      else if (action === 'count') recount();
+      else if (action === 'view') resize();
+      else if (action === 'atlas') buildAtlas();
+    }
+
+    SPEC.forEach(([group, rows], gi) => {
+      const d = document.createElement('details');
+      if (gi < 4) d.open = true;
+      d.innerHTML = `<summary>${group}</summary>`;
+      const wrap = document.createElement('div');
+      wrap.className = 'grp';
+      rows.forEach(([key, label, min, max, step, action, hint]) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.title = hint;
+        row.innerHTML =
+          `<div class="rlab"><span>${label}</span><b id="v_${key}">${fmt(P[key], step)}</b></div>`;
+        const inp = document.createElement('input');
+        inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = P[key];
+        inp.setAttribute('aria-label', label);
+        inp.addEventListener('input', () => {
+          P[key] = parseFloat(inp.value);
+          document.getElementById('v_' + key).textContent = fmt(P[key], step);
+          apply(action);
+        });
+        inputs[key] = { el: inp, step, action };
+        row.appendChild(inp);
+        wrap.appendChild(row);
+      });
+
+      if (group === 'Render') {
+        wrap.insertAdjacentHTML('beforeend', `
+          <label class="chk"><input type="checkbox" id="cAdd"> Additive blending</label>
+          <label class="chk"><input type="checkbox" id="cThr" checked> Auto-throttle for frame rate</label>
+          <div class="sel"><span>Character set</span>
+            <select id="sChars">
+              <option value="alnum">Letters + digits</option>
+              <option value="letters">Letters</option>
+              <option value="digits">Digits</option>
+              <option value="hex">Hex</option>
+              <option value="binary">Binary</option>
+              <option value="code">Code</option>
+              <option value="kana">Katakana</option>
+              <option value="custom">Custom</option>
+            </select></div>
+          <div class="sel"><span>Custom text</span><input type="text" id="tChars"
+               value="TOMAYA" maxlength="200" spellcheck="false" aria-label="Custom characters"></div>
+          <div class="sel"><span>Glyph colour</span><input type="color" id="cGlyph" value="#ffffff"></div>
+          <div class="sel"><span>Background</span><input type="color" id="cBg" value="#040404"></div>`);
+      }
+      d.appendChild(wrap);
+      body.appendChild(d);
+    });
+
+    const cAdd = document.getElementById('cAdd'), cThr = document.getElementById('cThr');
+    const sChars = document.getElementById('sChars');
+    const cGlyph = document.getElementById('cGlyph'), cBg = document.getElementById('cBg');
+    cAdd.addEventListener('change', () => { P.additive = cAdd.checked; });
+    cThr.addEventListener('change', () => { P.autoThrottle = cThr.checked; if (!P.autoThrottle) active = target; });
+    const tChars = document.getElementById('tChars');
+    sChars.addEventListener('change', () => { P.charset = sChars.value; buildAtlas(); });
+    tChars.addEventListener('input', () => {
+      P.customChars = tChars.value;
+      if (P.charset !== 'custom') { P.charset = 'custom'; sChars.value = 'custom'; }
+      buildAtlas();
+    });
+    cGlyph.addEventListener('input', () => { P.glyphColor = cGlyph.value; buildAtlas(); });
+    cBg.addEventListener('input', () => { P.bgColor = cBg.value; document.body.style.background = P.bgColor; });
+
+    function syncUI() {
+      for (const k in inputs) {
+        inputs[k].el.value = P[k];
+        document.getElementById('v_' + k).textContent = fmt(P[k], inputs[k].step);
+      }
+      cAdd.checked = P.additive; cThr.checked = P.autoThrottle;
+      sChars.value = P.charset; tChars.value = P.customChars;
+      cGlyph.value = P.glyphColor; cBg.value = P.bgColor;
+      document.body.style.background = P.bgColor;
+      deriveAll(); buildLut(); buildAtlas(); resize();
+    }
+
+    document.getElementById('bReset').addEventListener('click', () => {
+      Object.assign(P, FIT); syncUI();
+    });
+
+    document.getElementById('bRandom').addEventListener('click', () => {
+      const r = (a, b) => a + Math.random() * (b - a);
+      Object.assign(P, {
+        uRim: r(0.55, 1.0), uFloor: r(0.08, 0.55), q: r(0.15, 1.6),
+        span0: r(0.04, 0.35), span1: r(0, 0.25), fadeIn: r(0.02, 0.2),
+        v0: r(0.02, 0.14), v1: r(0.05, 0.7), vp: r(0.5, 2.6),
+        sizeSpread: r(0.1, 0.6), brGamma: r(0.4, 1.8),
+        swirl: Math.random() < 0.5 ? 0 : r(-0.5, 0.5)
+      });
+      if (P.uFloor > P.uRim - 0.05) P.uFloor = P.uRim - 0.05;
+      syncUI();
+    });
+
+    document.getElementById('bCopy').addEventListener('click', async (e) => {
+      const txt = JSON.stringify(P, null, 2);
+      try { await navigator.clipboard.writeText(txt); e.target.textContent = 'Copied'; }
+      catch { e.target.textContent = 'Copy blocked'; console.log(txt); }
+      setTimeout(() => { e.target.textContent = 'Copy settings'; }, 1400);
+    });
+
+    document.getElementById('bExport').addEventListener('click', () => {
+      const root = document.documentElement.cloneNode(true);
+      root.querySelectorAll('#panel, #toggle, #dive').forEach(el => el.remove());
+
+      const scripts = root.querySelectorAll('body > script');
+      const mainScript = scripts[scripts.length - 1];
+      const config = document.createElement('script');
+      const safeSettings = JSON.stringify(P).replace(/<\/script/gi, '<\\/script').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+    config.textContent = 'window.__VORTEX_EXPORT__ = true; window.__VORTEX_SETTINGS__ = ' + safeSettings + ';';
+      mainScript.parentNode.insertBefore(config, mainScript);
+
+      const html = '<!DOCTYPE html>\n' + root.outerHTML;
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'index.html';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    const panel = document.getElementById('panel');
+    function togglePanel() {
+      const hidden = panel.hasAttribute('hidden-panel');
+      if (hidden) panel.removeAttribute('hidden-panel'); else panel.setAttribute('hidden-panel', '');
+    }
+    document.getElementById('toggle').addEventListener('click', togglePanel);
+    addEventListener('keydown', e => {
+      if (e.key === 'h' || e.key === 'H') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        togglePanel();
+      }
+    });
+  }
+})();
+</script>
+
+
+</body></html>
