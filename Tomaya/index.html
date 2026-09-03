@@ -354,9 +354,17 @@
 
   /* ---------------- viewport ---------------- */
   let W = 0, H = 0, cx = 0, cy = 0, R = 1, base = 1, target = 1000, active = 1000;
+
+  // Keep visual richness consistent across viewport sizes.
+  // At the authored default density (0.009), target ~1850 glyphs on every device.
+  // The density control still scales the count proportionally.
+  const DENSITY_REFERENCE = 0.009;
+  const COUNT_REFERENCE = 1850;
   function recount() {
-    const mobileDensityBoost = coarsePointer ? 1.22 : 1;
-    target = Math.max(50, Math.min(MAX, Math.round(P.density * R * R * mobileDensityBoost)));
+    target = Math.max(
+      50,
+      Math.min(MAX, Math.round(COUNT_REFERENCE * (P.density / DENSITY_REFERENCE)))
+    );
     if (!P.autoThrottle || active > target) active = target;
   }
   function resize() {
