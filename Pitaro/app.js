@@ -17,11 +17,9 @@ const FONT_NAMES = {
 };
 
 const PREVIEW_FPS = 30;
-const TEXT_ENTRANCE_DELAY_FRAMES = 10;
 const TEXT_ENTRANCE_DURATION_FRAMES = 10;
 const WORD_STAGGER_FRAMES = 2;
 const TEXT_RISE_PX = 20;
-const TEXT_ENTRANCE_START = TEXT_ENTRANCE_DELAY_FRAMES / PREVIEW_FPS;
 
 const state = {
   mode: 'text',
@@ -44,6 +42,7 @@ const state = {
   closingLogo: true,
   closingLogoAvailable: false,
   wordByWord: true,
+  textStart: 3,
   previewAudioUnlocked: false,
   lastPreviewTime: 0,
   raf: null,
@@ -56,6 +55,7 @@ const editableText = $('editableText');
 const animatedText = $('animatedText');
 const textContentEditor = $('textContentEditor');
 const wordByWordToggle = $('wordByWordToggle');
+const textStartInput = $('textStart');
 const bgVideo = $('bgVideo');
 const fgVideo = $('fgVideo');
 const fg2Video = $('fg2Video');
@@ -297,7 +297,7 @@ function cubicBezier0001(progress) {
 function textEntranceAt(time, wordIndex = 0) {
   const frame = Math.max(0, Number(time) || 0) * PREVIEW_FPS;
   const stagger = state.wordByWord ? Math.max(0, wordIndex) * WORD_STAGGER_FRAMES : 0;
-  const startFrame = TEXT_ENTRANCE_DELAY_FRAMES + stagger;
+  const startFrame = state.textStart * PREVIEW_FPS + stagger;
   // Frames before the start keyframe are not rendered at all. No opacity animation.
   if (frame + 1e-6 < startFrame) return { visible: false, offset: TEXT_RISE_PX };
   const progress = (frame - startFrame) / TEXT_ENTRANCE_DURATION_FRAMES;
@@ -481,6 +481,7 @@ function setMode(mode) {
   editableText.classList.toggle('is-hidden', !text);
   animatedText?.classList.toggle('is-hidden', !text);
   document.querySelector('.word-by-word-row')?.classList.toggle('is-hidden', !text);
+  document.querySelector('.text-start-control')?.classList.toggle('is-hidden', !text);
   if (!text) exitTextEdit();
   updateMediaVisibility();
   object.dataset.mode = mode;
@@ -502,7 +503,7 @@ function enterTextEdit(restoreSelection = false) {
   if (!previewMasterVideo.paused) pausePreview();
   // Direct canvas editing always happens at/after the entrance frame; the external editor works at any time.
   const now = Number($('timeline').value) || 0;
-  if (now < TEXT_ENTRANCE_START) syncAt(TEXT_ENTRANCE_START);
+  if (now < state.textStart) syncAt(state.textStart);
   state.editing = true;
   activeTextEditor = editableText;
   savedTextRoot = editableText;
@@ -607,6 +608,15 @@ $('fontSelect').addEventListener('change', (e) => applyFontToSelection(e.target.
 wordByWordToggle?.addEventListener('change', (e) => {
   state.wordByWord = !!e.target.checked;
   applyVisualState(Number($('timeline').value) || 0);
+});
+textStartInput?.addEventListener('input', () => {
+  const seconds = textStartInput.valueAsNumber;
+  if (!Number.isFinite(seconds)) return;
+  state.textStart = Math.max(0, seconds);
+  applyVisualState();
+});
+textStartInput?.addEventListener('change', () => {
+  textStartInput.value = state.textStart;
 });
 document.addEventListener('selectionchange', () => {
   updateActiveFontFromSelection();
@@ -1845,6 +1855,7 @@ setColor('#F3F3F3');
 syncSideEditorFromModel(true);
 syncAnimatedTextModel();
 if (wordByWordToggle) wordByWordToggle.checked = state.wordByWord;
+if (textStartInput) textStartInput.value = state.textStart;
 applyVisualState(0);
 initTemplate();
 
